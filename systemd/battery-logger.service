@@ -1,0 +1,19 @@
+[Unit]
+Description=Battery Logger Daemon
+After=multi-user.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=%i
+ExecStart=/home/prajwal/github-repos/battery-logger/battery-logger run
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Create necessary directories
+ExecStartPre=/bin/mkdir -p /home/prajwal/.local/state/battery-logger
+
+[Install]
+WantedBy=multi-user.target
