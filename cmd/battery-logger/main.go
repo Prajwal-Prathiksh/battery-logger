@@ -300,13 +300,18 @@ func tuiCmd() {
 			acColor = "🟢"
 		}
 
-		// For regression, consider only unplugged points in window
-		var unplugged []analytics.Row
-		for _, r := range rows {
-			if !r.AC {
-				unplugged = append(unplugged, r)
-			}
-		}
+		// For regression, consider only the most recent contiguous unplugged points
+        var unplugged []analytics.Row
+        // Start from the end and work backwards to find the most recent contiguous unplugged batch
+        for i := len(rows) - 1; i >= 0; i-- {
+            if !rows[i].AC {
+                // Prepend to maintain chronological order
+                unplugged = append([]analytics.Row{rows[i]}, unplugged...)
+            } else {
+                // Hit a plugged point, stop collecting
+                break
+            }
+        }
 
 		var est string
 		var slopeStr string
