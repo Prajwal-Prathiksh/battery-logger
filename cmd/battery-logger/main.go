@@ -20,6 +20,7 @@ import (
 	"github.com/mum4k/termdash"
 	"github.com/mum4k/termdash/cell"
 	"github.com/mum4k/termdash/container"
+	"github.com/mum4k/termdash/keyboard"
 	"github.com/mum4k/termdash/linestyle"
 	"github.com/mum4k/termdash/terminal/tcell"
 	"github.com/mum4k/termdash/terminal/terminalapi"
@@ -347,7 +348,9 @@ func tuiCmd() {
 	c, err := container.New(
 		t,
 		container.Border(linestyle.Light),
-		container.BorderTitle("Battery Logger TUI - Press q to quit, r to refresh"),
+		container.BorderTitle("Battery Logger TUI - Tab to switch focus, q to quit, r to refresh"),
+		container.KeyFocusNext(keyboard.KeyTab),         // Tab key for next focus
+		container.KeyFocusPrevious(keyboard.KeyBacktab), // Shift+Tab for previous focus (backtab)
 		container.SplitHorizontal(
 			container.Top(
 				container.Border(linestyle.Light),
