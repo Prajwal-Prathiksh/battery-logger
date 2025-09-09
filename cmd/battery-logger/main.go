@@ -169,6 +169,31 @@ func readCSV(path string) ([]analytics.Row, error) {
 	return analytics.ParseCSVRows(rows)
 }
 
+// findLastACTransition finds the most recent AC status change and returns
+// the time and battery percentage when the current AC status started.
+// Returns zero time and 0.0 battery if no transition found.
+func findLastACTransition(rows []analytics.Row) (time.Time, float64) {
+	if len(rows) == 0 {
+		return time.Time{}, 0.0
+	}
+	
+	currentACStatus := rows[len(rows)-1].AC
+	
+	// Walk backwards from the end to find the last status change
+	for i := len(rows) - 2; i >= 0; i-- {
+		if rows[i].AC != currentACStatus {
+			// Found the transition point - return the time and battery of the first sample with current status
+			if i+1 < len(rows) {
+				return rows[i+1].T, rows[i+1].Batt
+			}
+		}
+	}
+	
+	// No transition found in the data, current status has been the same throughout
+	// Return the time and battery of the first sample
+	return rows[0].T, rows[0].Batt
+}
+
 // tuiCmd implements the TUI command
 func tuiCmd() {
 	var windowStr string
@@ -300,6 +325,13 @@ func tuiCmd() {
 			acColor = "🟢"
 		}
 
+		// Find when the current AC status started
+		transitionTime, transitionBatt := findLastACTransition(rows)
+		var sinceStr string
+		if !transitionTime.IsZero() {
+			sinceStr = fmt.Sprintf(" (Since: %s, %.1f%%)", transitionTime.Format("15:04"), transitionBatt)
+		}
+
 		// For regression, consider only the most recent contiguous unplugged points
         var unplugged []analytics.Row
         // Start from the end and work backwards to find the most recent contiguous unplugged batch
@@ -357,7 +389,7 @@ func tuiCmd() {
 		timeRange := rows[len(rows)-1].T.Sub(rows[0].T)
 		
 		info.Text = fmt.Sprintf(
-			"%s AC Status: %s\n"+
+			"%s AC Status: %s%s\n"+
 			"🔋 Current Battery: %.1f%%\n"+
 			"📈 Discharge Rate: %s\n"+
 			"⏱️  Time to 0%%: %s %s\n"+
@@ -373,7 +405,7 @@ func tuiCmd() {
 			"\n"+
 			"📝 Note: Chart x-axis shows sample sequence, time span in title\n"+
 			"Press q to quit, r to refresh now",
-			acColor, acStatus,
+			acColor, acStatus, sinceStr,
 			latest.Batt,
 			slopeStr,
 			est, confidence,
