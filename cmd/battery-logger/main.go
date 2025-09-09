@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"flag"
 	"fmt"
 	"log"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
@@ -15,8 +17,14 @@ import (
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/logfile"
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/sysfs"
 
-	ui "github.com/gizak/termui/v3"
-	"github.com/gizak/termui/v3/widgets"
+	"github.com/mum4k/termdash"
+	"github.com/mum4k/termdash/cell"
+	"github.com/mum4k/termdash/container"
+	"github.com/mum4k/termdash/linestyle"
+	"github.com/mum4k/termdash/terminal/tcell"
+	"github.com/mum4k/termdash/terminal/terminalapi"
+	"github.com/mum4k/termdash/widgets/linechart"
+	"github.com/mum4k/termdash/widgets/text"
 )
 
 func main() {
@@ -158,7 +166,7 @@ func readCSV(path string) ([]analytics.Row, error) {
 		return nil, err
 	}
 	defer f.Close()
-	
+
 	r := csv.NewReader(f)
 	r.FieldsPerRecord = -1
 	rows, err := r.ReadAll()
@@ -176,9 +184,9 @@ func findLastACTransition(rows []analytics.Row) (time.Time, float64) {
 	if len(rows) == 0 {
 		return time.Time{}, 0.0
 	}
-	
+
 	currentACStatus := rows[len(rows)-1].AC
-	
+
 	// Walk backwards from the end to find the last status change
 	for i := len(rows) - 2; i >= 0; i-- {
 		if rows[i].AC != currentACStatus {
@@ -188,13 +196,105 @@ func findLastACTransition(rows []analytics.Row) (time.Time, float64) {
 			}
 		}
 	}
-	
+
 	// No transition found in the data, current status has been the same throughout
 	// Return the time and battery of the first sample
 	return rows[0].T, rows[0].Batt
 }
 
-// tuiCmd implements the TUI command
+// BinDataPoint represents a time bin with battery data
+type BinDataPoint struct {
+	Time    time.Time
+	Batt    float64
+	AC      bool
+	HasData bool
+}
+
+// binDataToTimeGrid bins the data into time intervals for plotting
+func binDataToTimeGrid(rows []analytics.Row, binSize time.Duration, window time.Duration) []BinDataPoint {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	// Calculate the time range
+	endTime := rows[len(rows)-1].T
+	startTime := endTime.Add(-window)
+
+	// Create bins
+	var bins []BinDataPoint
+	for t := startTime; t.Before(endTime) || t.Equal(endTime); t = t.Add(binSize) {
+		bins = append(bins, BinDataPoint{
+			Time:    t,
+			HasData: false,
+		})
+	}
+
+	// Fill bins with data
+	for _, row := range rows {
+		if row.T.Before(startTime) {
+			continue
+		}
+
+		// Find the appropriate bin
+		binIndex := int(row.T.Sub(startTime) / binSize)
+		if binIndex >= 0 && binIndex < len(bins) {
+			bins[binIndex].Batt = row.Batt
+			bins[binIndex].AC = row.AC
+			bins[binIndex].HasData = true
+		}
+	}
+
+	return bins
+}
+
+// createTimeBasedSeries creates series data with intelligent time-based x-labels for zooming
+func createTimeBasedSeries(bins []BinDataPoint, startTime time.Time) ([]float64, []float64, map[int]string) {
+	acSeries := make([]float64, len(bins))
+	battSeries := make([]float64, len(bins))
+
+	// Create intelligent time labels based on data density
+	labels := make(map[int]string)
+
+	for i, bin := range bins {
+		if bin.HasData {
+			if bin.AC {
+				acSeries[i] = bin.Batt
+				battSeries[i] = math.NaN()
+			} else {
+				battSeries[i] = bin.Batt
+				acSeries[i] = math.NaN()
+			}
+		} else {
+			acSeries[i] = math.NaN()
+			battSeries[i] = math.NaN()
+		}
+	}
+
+	// Create time labels for all points - termdash will intelligently display them
+	// We'll provide labels at different granularities for different zoom levels
+	for i, bin := range bins {
+		minute := bin.Time.Minute()
+
+		// Always provide a time label - format depends on the time
+		if minute == 0 {
+			// Top of the hour - show HH:00
+			labels[i] = bin.Time.Format("15:04")
+		} else if minute%15 == 0 {
+			// Quarter hours - show HH:15, HH:30, HH:45
+			labels[i] = bin.Time.Format("15:04")
+		} else if minute%5 == 0 {
+			// Every 5 minutes - useful for zoomed views
+			labels[i] = bin.Time.Format("15:04")
+		} else {
+			// For very zoomed views, show all times
+			labels[i] = bin.Time.Format("15:04")
+		}
+	}
+
+	return acSeries, battSeries, labels
+}
+
+// tuiCmd implements the TUI command using termdash
 func tuiCmd() {
 	var windowStr string
 	var alpha float64
@@ -204,7 +304,7 @@ func tuiCmd() {
 	fs.StringVar(&windowStr, "window", "6h", "rolling window to display & regress (e.g., 10m, 30m, 2h)")
 	fs.Float64Var(&alpha, "alpha", 0.05, "exponential decay per minute for weights (e.g., 0.05)")
 	fs.StringVar(&refreshStr, "refresh", "10s", "UI refresh period (e.g., 2s, 1s, 5s)")
-	
+
 	if len(os.Args) > 2 {
 		fs.Parse(os.Args[2:])
 	}
@@ -221,102 +321,122 @@ func tuiCmd() {
 	// Get the log file path using the config system
 	_, logPath := loadPaths()
 
-	if err := ui.Init(); err != nil {
-		log.Fatalf("failed to initialize termui: %v", err)
+	// Create terminal
+	t, err := tcell.New()
+	if err != nil {
+		log.Fatalf("tcell.New => %v", err)
 	}
-	defer ui.Close()
+	defer t.Close()
 
-	// Create plot widget
-	plot := widgets.NewPlot()
-	plot.Title = "Battery % Over Time"
-	plot.PlotType = widgets.LineChart
-	plot.Marker = widgets.MarkerDot
-	plot.Data = [][]float64{{}}
-	plot.SetRect(0, 0, 100, 20)
-	plot.AxesColor = ui.ColorWhite
-	plot.LineColors = []ui.Color{ui.ColorGreen, ui.ColorRed} // Green for AC, Red for battery
-
-	// Create info widget with scrolling capability
-	info := widgets.NewList()
-	info.Title = "Battery Status & Prediction (↑↓ to scroll)"
-	info.SetRect(0, 20, 100, 30)
-	info.BorderStyle.Fg = ui.ColorYellow
-	info.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorBlack, ui.ModifierClear)
-	info.WrapText = false
-
-	// Create grid layout
-	grid := ui.NewGrid()
-	termW, termH := ui.TerminalDimensions()
-	grid.SetRect(0, 0, termW, termH)
-	grid.Set(
-		ui.NewRow(0.7, plot),
-		ui.NewRow(0.3, info),
+	// Create widgets
+	chartWidget, err := linechart.New(
+		linechart.AxesCellOpts(cell.FgColor(cell.ColorWhite)),
+		linechart.YLabelCellOpts(cell.FgColor(cell.ColorWhite)),
+		linechart.XLabelCellOpts(cell.FgColor(cell.ColorWhite)),
 	)
+	if err != nil {
+		log.Fatalf("linechart.New => %v", err)
+	}
 
-	ui.Render(grid)
+	textWidget, err := text.New(text.RollContent(), text.WrapAtWords())
+	if err != nil {
+		log.Fatalf("text.New => %v", err)
+	}
 
-	ticker := time.NewTicker(refresh)
-	defer ticker.Stop()
+	// Set up the container with layout
+	c, err := container.New(
+		t,
+		container.Border(linestyle.Light),
+		container.BorderTitle("Battery Logger TUI - Press q to quit, r to refresh"),
+		container.SplitHorizontal(
+			container.Top(
+				container.Border(linestyle.Light),
+				container.BorderTitle("Battery % Over Time"),
+				container.PlaceWidget(chartWidget),
+			),
+			container.Bottom(
+				container.Border(linestyle.Light),
+				container.BorderTitle("Battery Status & Prediction"),
+				container.PlaceWidget(textWidget),
+			),
+			container.SplitPercent(70),
+		),
+	)
+	if err != nil {
+		log.Fatalf("container.New => %v", err)
+	}
 
-	draw := func() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Data update function
+	updateData := func() error {
 		rows, err := readCSV(logPath)
 		if err != nil || len(rows) == 0 {
-			info.Rows = []string{fmt.Sprintf("Could not read data from %s: %v", logPath, err), "Press q to quit."}
-			ui.Render(grid)
-			return
+			textWidget.Write(fmt.Sprintf("Could not read data from %s: %v\n", logPath, err), text.WriteCellOpts(cell.FgColor(cell.ColorRed)))
+			textWidget.Write("Press q to quit, r to refresh\n")
+			return nil
 		}
-		
+
 		rows = analytics.FilterWindow(rows, window)
 		if len(rows) == 0 {
-			info.Rows = []string{"No recent data in window.", "Press q to quit."}
-			ui.Render(grid)
-			return
+			textWidget.Write("No recent data in window.\n", text.WriteCellOpts(cell.FgColor(cell.ColorYellow)))
+			textWidget.Write("Press q to quit, r to refresh\n")
+			return nil
 		}
 
-		// Create chronological series with NaN for gaps to maintain time positioning
-		acSeries := make([]float64, len(rows))
-		battSeries := make([]float64, len(rows))
-		hasAC := false
-		hasBatt := false
-		
-		for i, r := range rows {
-			if r.AC {
-				acSeries[i] = r.Batt
-				battSeries[i] = math.NaN()
+		// Create time-based bins (1-minute bins for finest granularity)
+		binSize := 1 * time.Minute
+		bins := binDataToTimeGrid(rows, binSize, window)
+		dataStartTime := rows[0].T
+		acSeries, battSeries, labels := createTimeBasedSeries(bins, dataStartTime)
+
+		// Clear previous chart data
+		chartWidget.Series("ac", nil)
+		chartWidget.Series("battery", nil)
+
+		// Add series with gaps (NaN values create gaps)
+		var hasAC, hasBatt bool
+		acValues := []float64{}
+		battValues := []float64{}
+
+		for i := range acSeries {
+			if !math.IsNaN(acSeries[i]) {
 				hasAC = true
-			} else {
-				battSeries[i] = r.Batt
-				acSeries[i] = math.NaN()
+			}
+			if !math.IsNaN(battSeries[i]) {
 				hasBatt = true
 			}
+			acValues = append(acValues, acSeries[i])
+			battValues = append(battValues, battSeries[i])
 		}
 
-		// Update plot data - show both series if both exist
-		if hasAC && hasBatt {
-			plot.Data = [][]float64{acSeries, battSeries}
-			plot.LineColors = []ui.Color{ui.ColorGreen, ui.ColorRed}
-		} else if hasAC {
-			plot.Data = [][]float64{acSeries}
-			plot.LineColors = []ui.Color{ui.ColorGreen}
-		} else if hasBatt {
-			plot.Data = [][]float64{battSeries}
-			plot.LineColors = []ui.Color{ui.ColorRed}
-		} else {
-			// Fallback to showing all data as one series
-			series := make([]float64, len(rows))
-			for i, r := range rows {
-				series[i] = r.Batt
+		// Set Y-axis range - remove invalid API call
+
+		// Set custom X-axis labels for time - these will be used by termdash for zooming
+		xLabels := labels
+
+		// Add series to chart with time-based labels
+		if hasAC {
+			if err := chartWidget.Series("ac", acValues,
+				linechart.SeriesCellOpts(cell.FgColor(cell.ColorGreen)),
+				linechart.SeriesXLabels(xLabels),
+			); err != nil {
+				return fmt.Errorf("setting AC series: %v", err)
 			}
-			plot.Data = [][]float64{series}
-			plot.LineColors = []ui.Color{ui.ColorCyan}
 		}
 
-		// Calculate time span and update title with time context
-		timeSpan := rows[len(rows)-1].T.Sub(rows[0].T)
-		startTime := rows[0].T.Format("15:04")
-		endTime := rows[len(rows)-1].T.Format("15:04")
-		
-		plot.Title = fmt.Sprintf("Battery %% Over Time (%s - %s, %s)", startTime, endTime, timeSpan.Round(time.Minute).String())
+		if hasBatt {
+			if err := chartWidget.Series("battery", battValues,
+				linechart.SeriesCellOpts(cell.FgColor(cell.ColorRed)),
+				linechart.SeriesXLabels(xLabels),
+			); err != nil {
+				return fmt.Errorf("setting battery series: %v", err)
+			}
+		}
+
+		// Update status text
+		textWidget.Reset()
 
 		// Latest status
 		latest := rows[len(rows)-1]
@@ -335,30 +455,23 @@ func tuiCmd() {
 		}
 
 		// For regression, consider only the most recent contiguous unplugged points
-        var unplugged []analytics.Row
-        // Start from the end and work backwards to find the most recent contiguous unplugged batch
-        for i := len(rows) - 1; i >= 0; i-- {
-            if !rows[i].AC {
-                // Prepend to maintain chronological order
-                unplugged = append([]analytics.Row{rows[i]}, unplugged...)
-            } else {
-                // Hit a plugged point, stop collecting
-                break
-            }
-        }
+		var unplugged []analytics.Row
+		for i := len(rows) - 1; i >= 0; i-- {
+			if !rows[i].AC {
+				unplugged = append([]analytics.Row{rows[i]}, unplugged...)
+			} else {
+				break
+			}
+		}
 
 		var est string
 		var slopeStr string
 		var confidence string
-		
+
 		if len(unplugged) >= 2 {
 			b, _, ok := analytics.WeightedLinReg(unplugged, alpha)
-			// b is % per minute (negative when discharging)
-			// Use actual latest battery level, not regression intercept
 			if ok && b < -1e-6 {
 				mins := -latest.Batt / b
-
-				// Estimate time to 0%
 				est = analytics.FmtDur(mins)
 				confidence = fmt.Sprintf("(based on %d unplugged samples)", len(unplugged))
 			} else if ok && b >= -1e-6 {
@@ -386,10 +499,12 @@ func tuiCmd() {
 				battSamples++
 			}
 		}
-		
+
 		// Calculate time range
 		timeRange := rows[len(rows)-1].T.Sub(rows[0].T)
-		
+		startTime := rows[0].T.Format("15:04")
+		endTime := rows[len(rows)-1].T.Format("15:04")
+
 		// Get config file paths
 		_, existingConfigPaths := config.GetConfigPaths()
 		var configStr string
@@ -400,8 +515,9 @@ func tuiCmd() {
 		} else {
 			configStr = fmt.Sprintf("📋 Config files: %s (+ %d more)", existingConfigPaths[len(existingConfigPaths)-1], len(existingConfigPaths)-1)
 		}
-		
-		info.Rows = []string{
+
+		// Write status information
+		statusLines := []string{
 			fmt.Sprintf("%s AC Status: %s%s", acIcon, acStatus, sinceStr),
 			fmt.Sprintf("🔋 Current Battery: %.1f%%", latest.Batt),
 			fmt.Sprintf("📈 Discharge Rate: %s", slopeStr),
@@ -409,63 +525,72 @@ func tuiCmd() {
 			"",
 			fmt.Sprintf("📊 Data Summary (window: %s):", window),
 			fmt.Sprintf("   Total samples: %d (spanning %s)", totalSamples, timeRange.Round(time.Minute).String()),
-			fmt.Sprintf("   AC plugged: %d samples [🟢](fg:green)", acSamples),
-			fmt.Sprintf("   On battery: %d samples [🔴](fg:red)", battSamples),
+			fmt.Sprintf("   AC plugged: %d samples", acSamples),
+			fmt.Sprintf("   On battery: %d samples", battSamples),
 			fmt.Sprintf("   Time range: %s to %s", startTime, endTime),
 			"",
 			fmt.Sprintf("⚙️  Settings: Alpha=%.3f, Refresh=%s", alpha, refresh),
 			fmt.Sprintf("📄 Data file: %s", logPath),
 			configStr,
 			"",
-			"📝 Note: 1) Chart x-axis shows sample sequence, time span in title",
+			"📝 Note: 1) X-axis shows time (HH:MM), use mouse/keys to zoom",
 			"         2) Green line = AC plugged, Red line = On battery",
+			"         3) Gaps indicate missing data periods",
 			"Press q to quit, r to refresh now, ↑↓ to scroll",
 		}
 
-		// Resize-aware
-		termW, termH = ui.TerminalDimensions()
-		grid.SetRect(0, 0, termW, termH)
-		ui.Render(grid)
+		for _, line := range statusLines {
+			var opts []text.WriteOption
+			if strings.Contains(line, "AC plugged") {
+				opts = append(opts, text.WriteCellOpts(cell.FgColor(cell.ColorGreen)))
+			} else if strings.Contains(line, "On battery") {
+				opts = append(opts, text.WriteCellOpts(cell.FgColor(cell.ColorRed)))
+			} else if strings.HasPrefix(line, "🔋") || strings.HasPrefix(line, "🔌") {
+				opts = append(opts, text.WriteCellOpts(cell.FgColor(cell.ColorYellow)))
+			}
+
+			textWidget.Write(line+"\n", opts...)
+		}
+
+		return nil
 	}
 
-	// Initial draw
-	draw()
+	// Initial data load
+	if err := updateData(); err != nil {
+		log.Printf("Initial data load error: %v", err)
+	}
 
-	// Event loop
-	uiEvents := ui.PollEvents()
-	for {
-		select {
-		case e := <-uiEvents:
-			switch e.ID {
-			case "q", "<C-c>":
+	// Set up periodic refresh
+	go func() {
+		ticker := time.NewTicker(refresh)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
 				return
-			case "r":
-				draw()
-			case "<Up>", "k":
-				info.ScrollUp()
-				ui.Render(grid)
-			case "<Down>", "j":
-				info.ScrollDown()
-				ui.Render(grid)
-			case "<PageUp>":
-				info.ScrollPageUp()
-				ui.Render(grid)
-			case "<PageDown>":
-				info.ScrollPageDown()
-				ui.Render(grid)
-			case "<Home>":
-				info.ScrollTop()
-				ui.Render(grid)
-			case "<End>":
-				info.ScrollBottom()
-				ui.Render(grid)
-			case "<Resize>":
-				payload := e.Payload.(ui.Resize)
-				grid.SetRect(0, 0, payload.Width, payload.Height)
-				ui.Render(grid)
+			case <-ticker.C:
+				if err := updateData(); err != nil {
+					log.Printf("Data update error: %v", err)
+				}
 			}
-		case <-ticker.C:
-			draw()
 		}
+	}()
+
+	// Handle keyboard events
+	quitter := func(k *terminalapi.Keyboard) {
+		if k.Key == 'q' || k.Key == 'Q' {
+			cancel()
+		}
+		if k.Key == 'r' || k.Key == 'R' {
+			if err := updateData(); err != nil {
+				log.Printf("Manual refresh error: %v", err)
+			}
+		}
+	}
+
+	// Run the dashboard
+	if err := termdash.Run(ctx, t, c, termdash.KeyboardSubscriber(quitter), termdash.RedrawInterval(refresh)); err != nil {
+		log.Fatalf("termdash.Run => %v", err)
 	}
 }
