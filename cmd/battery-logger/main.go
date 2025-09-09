@@ -367,6 +367,8 @@ func tuiCmd() {
 		linechart.AxesCellOpts(cell.FgColor(cell.ColorWhite)),
 		linechart.YLabelCellOpts(cell.FgColor(cell.ColorWhite)),
 		linechart.XLabelCellOpts(cell.FgColor(cell.ColorWhite)),
+		linechart.YAxisCustomScale(0, 100),
+		linechart.YAxisFormattedValues(linechart.ValueFormatterRoundWithSuffix("%")),
 	)
 	if err != nil {
 		log.Fatalf("linechart.New => %v", err)
