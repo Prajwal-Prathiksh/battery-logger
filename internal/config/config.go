@@ -32,11 +32,9 @@ func Defaults() Config {
 	}
 }
 
-func Load() (Config, error) {
-	cfg := Defaults()
-	
-	// Configuration file locations in priority order (lowest to highest)
-	configPaths := []string{
+// getConfigPathsInternal returns the list of config file paths that are checked
+func getConfigPathsInternal() []string {
+	return []string{
 		// Local project config
 		filepath.Join("internal", "config", "config.toml"),
 		// User config
@@ -44,6 +42,37 @@ func Load() (Config, error) {
 		// System config
 		"/etc/battery-logger/config.toml",
 	}
+}
+
+// GetConfigPaths returns the list of config file paths that are checked, and which ones exist
+func GetConfigPaths() ([]string, []string) {
+	relativePaths := getConfigPathsInternal()
+	
+	var allPaths []string
+	var existingPaths []string
+	
+	for _, path := range relativePaths {
+		// Resolve to absolute path
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			// If we can't resolve to absolute, use the original path
+			absPath = path
+		}
+		allPaths = append(allPaths, absPath)
+		
+		if _, err := os.Stat(path); err == nil {
+			existingPaths = append(existingPaths, absPath)
+		}
+	}
+	
+	return allPaths, existingPaths
+}
+
+func Load() (Config, error) {
+	cfg := Defaults()
+	
+	// Get config paths from the shared function
+	configPaths := getConfigPathsInternal()
 	
 	// Load configs in order, later ones override earlier ones
 	for _, path := range configPaths {

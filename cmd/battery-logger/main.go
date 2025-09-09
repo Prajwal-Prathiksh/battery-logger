@@ -390,6 +390,17 @@ func tuiCmd() {
 		// Calculate time range
 		timeRange := rows[len(rows)-1].T.Sub(rows[0].T)
 		
+		// Get config file paths
+		_, existingConfigPaths := config.GetConfigPaths()
+		var configStr string
+		if len(existingConfigPaths) == 0 {
+			configStr = "📋 Config: Using defaults (no config file found)"
+		} else if len(existingConfigPaths) == 1 {
+			configStr = fmt.Sprintf("📋 Config file: %s", existingConfigPaths[0])
+		} else {
+			configStr = fmt.Sprintf("📋 Config files: %s (+ %d more)", existingConfigPaths[len(existingConfigPaths)-1], len(existingConfigPaths)-1)
+		}
+		
 		info.Rows = []string{
 			fmt.Sprintf("%s AC Status: %s%s", acIcon, acStatus, sinceStr),
 			fmt.Sprintf("🔋 Current Battery: %.1f%%", latest.Batt),
@@ -398,15 +409,16 @@ func tuiCmd() {
 			"",
 			fmt.Sprintf("📊 Data Summary (window: %s):", window),
 			fmt.Sprintf("   Total samples: %d (spanning %s)", totalSamples, timeRange.Round(time.Minute).String()),
-			fmt.Sprintf("   AC plugged: %d samples ●", acSamples),
-			fmt.Sprintf("   On battery: %d samples ●", battSamples),
+			fmt.Sprintf("   AC plugged: %d samples [🟢](fg:green)", acSamples),
+			fmt.Sprintf("   On battery: %d samples [🔴](fg:red)", battSamples),
 			fmt.Sprintf("   Time range: %s to %s", startTime, endTime),
 			"",
 			fmt.Sprintf("⚙️  Settings: Alpha=%.3f, Refresh=%s", alpha, refresh),
 			fmt.Sprintf("📄 Data file: %s", logPath),
+			configStr,
 			"",
-			"📝 Note: Chart x-axis shows sample sequence, time span in title",
-			"    Green line = AC plugged, Red line = On battery",
+			"📝 Note: 1) Chart x-axis shows sample sequence, time span in title",
+			"         2) Green line = AC plugged, Red line = On battery",
 			"Press q to quit, r to refresh now, ↑↓ to scroll",
 		}
 
