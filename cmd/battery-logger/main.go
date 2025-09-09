@@ -372,7 +372,7 @@ func tuiCmd() {
 		log.Fatalf("linechart.New => %v", err)
 	}
 
-	textWidget, err := text.New(text.RollContent(), text.WrapAtWords())
+	textWidget, err := text.New(text.WrapAtWords())
 	if err != nil {
 		log.Fatalf("text.New => %v", err)
 	}
@@ -442,6 +442,11 @@ func tuiCmd() {
 				container.SplitHorizontal(
 					container.Top(
 						container.Border(linestyle.Light),
+						container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
+						container.PlaceWidget(textWidget),
+					),
+					container.Bottom(
+						container.Border(linestyle.Light),
 						container.BorderTitle("Settings - Press Enter to apply"),
 						container.SplitVertical(
 							container.Left(
@@ -453,12 +458,7 @@ func tuiCmd() {
 							container.SplitPercent(50),
 						),
 					),
-					container.Bottom(
-						container.Border(linestyle.Light),
-						container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
-						container.PlaceWidget(textWidget),
-					),
-					container.SplitFixed(4),
+					container.SplitFixedFromEnd(4),
 				),
 			),
 			container.SplitPercent(60),
