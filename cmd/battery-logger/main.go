@@ -365,10 +365,11 @@ func tuiCmd() {
 	// Create widgets
 	chartWidget, err := linechart.New(
 		linechart.AxesCellOpts(cell.FgColor(cell.ColorWhite)),
-		linechart.YLabelCellOpts(cell.FgColor(cell.ColorWhite)),
-		linechart.XLabelCellOpts(cell.FgColor(cell.ColorWhite)),
+		linechart.YLabelCellOpts(cell.FgColor(cell.ColorCyan)),
+		linechart.XLabelCellOpts(cell.FgColor(cell.ColorCyan)),
 		linechart.YAxisCustomScale(0, 100),
 		linechart.YAxisFormattedValues(linechart.ValueFormatterRoundWithSuffix("%")),
+		linechart.ZoomStepPercent(5),
 	)
 	if err != nil {
 		log.Fatalf("linechart.New => %v", err)
@@ -498,8 +499,8 @@ func tuiCmd() {
 		acSeries, battSeries, labels := createTimeBasedSeries(bins, dataStartTime)
 
 		// Clear previous chart data
-		chartWidget.Series("ac", nil)
-		chartWidget.Series("battery", nil)
+		chartWidget.Series("charging", nil)
+		chartWidget.Series("discharging", nil)
 
 		// Add series with gaps (NaN values create gaps)
 		var hasAC, hasBatt bool
@@ -522,8 +523,8 @@ func tuiCmd() {
 
 		// Add series to chart with time-based labels
 		if hasAC {
-			if err := chartWidget.Series("ac", acValues,
-				linechart.SeriesCellOpts(cell.FgColor(cell.ColorGreen)),
+			if err := chartWidget.Series("charging", acValues,
+				linechart.SeriesCellOpts(cell.FgColor(cell.ColorGreen), cell.BgColor(cell.ColorDefault)),
 				linechart.SeriesXLabels(xLabels),
 			); err != nil {
 				return fmt.Errorf("setting AC series: %v", err)
@@ -531,8 +532,8 @@ func tuiCmd() {
 		}
 
 		if hasBatt {
-			if err := chartWidget.Series("battery", battValues,
-				linechart.SeriesCellOpts(cell.FgColor(cell.ColorRed)),
+			if err := chartWidget.Series("discharging", battValues,
+				linechart.SeriesCellOpts(cell.FgColor(cell.ColorRed), cell.BgColor(cell.ColorDefault)),
 				linechart.SeriesXLabels(xLabels),
 			); err != nil {
 				return fmt.Errorf("setting battery series: %v", err)
@@ -621,7 +622,7 @@ func tuiCmd() {
 		}
 
 		// Get current UI parameters for display
-		currentWindow, currentAlpha, _ := uiParams.Get()
+		currentWindow, _, _ := uiParams.Get()
 
 		// Write status information
 		statusLines := []string{
@@ -636,7 +637,6 @@ func tuiCmd() {
 			fmt.Sprintf("   On battery: %d samples", battSamples),
 			fmt.Sprintf("   Time range: %s to %s", startTime, endTime),
 			"",
-			fmt.Sprintf("⚙️  Current Settings: Window=%s, Alpha=%.3f", currentWindow, currentAlpha),
 			fmt.Sprintf("📄 Data file: %s", logPath),
 			configStr,
 		}
