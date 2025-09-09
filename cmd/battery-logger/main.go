@@ -351,12 +351,12 @@ func tuiCmd() {
 		container.SplitHorizontal(
 			container.Top(
 				container.Border(linestyle.Light),
-				container.BorderTitle("Battery % Over Time"),
+				container.BorderTitle("Battery % Over Time - Mouse up/down to zoom"),
 				container.PlaceWidget(chartWidget),
 			),
 			container.Bottom(
 				container.Border(linestyle.Light),
-				container.BorderTitle("Battery Status & Prediction"),
+				container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
 				container.PlaceWidget(textWidget),
 			),
 			container.SplitPercent(70),
@@ -533,10 +533,9 @@ func tuiCmd() {
 			fmt.Sprintf("📄 Data file: %s", logPath),
 			configStr,
 			"",
-			"📝 Note: 1) X-axis shows time (HH:MM), use mouse/keys to zoom",
+			"📝 Note: 1) X-axis shows time (HH:MM)",
 			"         2) Green line = AC plugged, Red line = On battery",
 			"         3) Gaps indicate missing data periods",
-			"Press q to quit, r to refresh now, ↑↓ to scroll",
 		}
 
 		for _, line := range statusLines {
