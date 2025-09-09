@@ -333,7 +333,7 @@ func tuiCmd() {
 	var alpha float64
 
 	fs := flag.NewFlagSet("tui", flag.ExitOnError)
-	fs.StringVar(&windowStr, "window", "6h", "rolling window to display & regress (e.g., 10m, 30m, 2h)")
+	fs.StringVar(&windowStr, "window", "10h", "rolling window to display & regress (e.g., 10m, 30m, 2h)")
 	fs.Float64Var(&alpha, "alpha", 0.05, "exponential decay per minute for weights (e.g., 0.05)")
 
 	if len(os.Args) > 2 {
