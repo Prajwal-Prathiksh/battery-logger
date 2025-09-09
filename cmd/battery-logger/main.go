@@ -236,11 +236,13 @@ func tuiCmd() {
 	plot.AxesColor = ui.ColorWhite
 	plot.LineColors = []ui.Color{ui.ColorGreen, ui.ColorRed} // Green for AC, Red for battery
 
-	// Create info widget
-	info := widgets.NewParagraph()
-	info.Title = "Battery Status & Prediction"
+	// Create info widget with scrolling capability
+	info := widgets.NewList()
+	info.Title = "Battery Status & Prediction (↑↓ to scroll)"
 	info.SetRect(0, 20, 100, 30)
 	info.BorderStyle.Fg = ui.ColorYellow
+	info.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorBlack, ui.ModifierClear)
+	info.WrapText = false
 
 	// Create grid layout
 	grid := ui.NewGrid()
@@ -259,14 +261,14 @@ func tuiCmd() {
 	draw := func() {
 		rows, err := readCSV(logPath)
 		if err != nil || len(rows) == 0 {
-			info.Text = fmt.Sprintf("Could not read data from %s: %v\nPress q to quit.", logPath, err)
+			info.Rows = []string{fmt.Sprintf("Could not read data from %s: %v", logPath, err), "Press q to quit."}
 			ui.Render(grid)
 			return
 		}
 		
 		rows = analytics.FilterWindow(rows, window)
 		if len(rows) == 0 {
-			info.Text = "No recent data in window.\nPress q to quit."
+			info.Rows = []string{"No recent data in window.", "Press q to quit."}
 			ui.Render(grid)
 			return
 		}
@@ -319,10 +321,10 @@ func tuiCmd() {
 		// Latest status
 		latest := rows[len(rows)-1]
 		acStatus := "Unplugged"
-		acColor := "🔴"
+		acIcon := "🔋"
 		if latest.AC {
 			acStatus = "Plugged In"
-			acColor = "🟢"
+			acIcon = "🔌"
 		}
 
 		// Find when the current AC status started
@@ -388,35 +390,25 @@ func tuiCmd() {
 		// Calculate time range
 		timeRange := rows[len(rows)-1].T.Sub(rows[0].T)
 		
-		info.Text = fmt.Sprintf(
-			"%s AC Status: %s%s\n"+
-			"🔋 Current Battery: %.1f%%\n"+
-			"📈 Discharge Rate: %s\n"+
-			"⏱️  Time to 0%%: %s %s\n"+
-			"\n"+
-			"📊 Data Summary (window: %s):\n"+
-			"   Total samples: %d (spanning %s)\n"+
-			"   AC plugged: %d samples 🟢\n"+
-			"   On battery: %d samples 🔴\n"+
-			"   Time range: %s to %s\n"+
-			"\n"+
-			"⚙️  Settings: Alpha=%.3f, Refresh=%s\n"+
-			"📄 Data file: %s\n"+
-			"\n"+
-			"📝 Note: Chart x-axis shows sample sequence, time span in title\n"+
-			"Press q to quit, r to refresh now",
-			acColor, acStatus, sinceStr,
-			latest.Batt,
-			slopeStr,
-			est, confidence,
-			window,
-			totalSamples, timeRange.Round(time.Minute).String(),
-			acSamples,
-			battSamples,
-			startTime, endTime,
-			alpha, refresh,
-			logPath,
-		)
+		info.Rows = []string{
+			fmt.Sprintf("%s AC Status: %s%s", acIcon, acStatus, sinceStr),
+			fmt.Sprintf("🔋 Current Battery: %.1f%%", latest.Batt),
+			fmt.Sprintf("📈 Discharge Rate: %s", slopeStr),
+			fmt.Sprintf("⏱️  Time to 0%%: %s %s", est, confidence),
+			"",
+			fmt.Sprintf("📊 Data Summary (window: %s):", window),
+			fmt.Sprintf("   Total samples: %d (spanning %s)", totalSamples, timeRange.Round(time.Minute).String()),
+			fmt.Sprintf("   AC plugged: %d samples ●", acSamples),
+			fmt.Sprintf("   On battery: %d samples ●", battSamples),
+			fmt.Sprintf("   Time range: %s to %s", startTime, endTime),
+			"",
+			fmt.Sprintf("⚙️  Settings: Alpha=%.3f, Refresh=%s", alpha, refresh),
+			fmt.Sprintf("📄 Data file: %s", logPath),
+			"",
+			"📝 Note: Chart x-axis shows sample sequence, time span in title",
+			"    Green line = AC plugged, Red line = On battery",
+			"Press q to quit, r to refresh now, ↑↓ to scroll",
+		}
 
 		// Resize-aware
 		termW, termH = ui.TerminalDimensions()
@@ -437,6 +429,24 @@ func tuiCmd() {
 				return
 			case "r":
 				draw()
+			case "<Up>", "k":
+				info.ScrollUp()
+				ui.Render(grid)
+			case "<Down>", "j":
+				info.ScrollDown()
+				ui.Render(grid)
+			case "<PageUp>":
+				info.ScrollPageUp()
+				ui.Render(grid)
+			case "<PageDown>":
+				info.ScrollPageDown()
+				ui.Render(grid)
+			case "<Home>":
+				info.ScrollTop()
+				ui.Render(grid)
+			case "<End>":
+				info.ScrollBottom()
+				ui.Render(grid)
 			case "<Resize>":
 				payload := e.Payload.(ui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
