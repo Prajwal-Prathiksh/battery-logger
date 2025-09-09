@@ -1,6 +1,6 @@
 # Battery Logger
 
-![Battery Logger TUI Screenshot](assets/battery-logger-tui-screenshot.png)
+![Battery Logger TUI Screenshot](assets/battery-logger-tui-v2-screenshot.png)
 
 A lightweight Go daemon that logs battery status and power information to CSV files on Linux systems, and provides an interactive TUI for real-time data visualization and discharge prediction!
 
@@ -39,15 +39,15 @@ The TUI provides real-time visualization of battery data with intelligent discha
 battery-logger tui
 
 # Focus on recent data with custom settings
-battery-logger tui -window 30m -refresh 2s -alpha 0.1
+battery-logger tui -window 30m -alpha 0.1
 ```
 
 **Features:**
-- 📊 Real-time line graph with color-coded AC/battery status
+- 📊 Interactive line chart with mouse zoom support and real-time controls
 - 🧮 Smart discharge rate calculation using weighted regression
 - ⏱️ Time-to-empty predictions based on recent unplugged sessions
 - 📈 Data insights and sample statistics
-- ⌨️ Interactive controls (q to quit, r to refresh)
+- ⌨️ Real-time parameter adjustment (Tab/Enter to change settings, q to quit, r to refresh)
 
 See [docs/TUI.md](docs/TUI.md) for detailed TUI documentation.
 

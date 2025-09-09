@@ -10,23 +10,25 @@ The Battery Logger TUI provides real-time visualization of your battery data wit
 
 ## Options
 
-- `-window duration`: Time window to display and analyze (default: 6h)
-  - Examples: `10m`, `30m`, `1h`, `2h`, `4h`, `6h`
+- `-window duration`: Time window to display and analyze (default: 10h)
+  - Examples: `10m`, `30m`, `1h`, `2h`, `4h`, `6h`, `10h`
+  - Can be changed in real-time via input field
 - `-alpha float`: Exponential decay factor for weighted regression (default: 0.05)
   - Higher values give more weight to recent data points
   - Lower values consider historical data more equally
-- `-refresh duration`: UI refresh interval (default: 10s)
-  - Examples: `1s`, `2s`, `5s`, `10s`
+  - Can be changed in real-time via input field
+- **Refresh rate**: Fixed at 10 seconds.
 
 ## Features
 
 ### 📊 Real-time Visualization
-- **Dual-pane layout** with graph (70%) and status info (30%)
-- **Line graph** showing battery percentage over time
+- **Three-pane layout** with graph (60%), status info, and controls
+- **Interactive line chart** with mouse zoom support
 - **Color-coded data series**:
   - 🟢 **Green line**: When AC is plugged in
   - 🔴 **Red line**: When running on battery
-- **Time context** in title showing start/end times and duration
+- **Time-based X-axis** with intelligent labeling
+- **Real-time parameter controls** with auto-refresh on changes
 - **Smart data handling** with NaN gaps to maintain time positioning
 
 ### 🧮 Smart Predictions
@@ -45,14 +47,13 @@ The Battery Logger TUI provides real-time visualization of your battery data wit
 - **Real-time discharge rate** in %/min
 
 ### ⌨️ Controls
-- **q** or **Ctrl+C**: Quit the application
-- **r**: Force refresh display
-- **↑/k**: Scroll info panel up
-- **↓/j**: Scroll info panel down
-- **Page Up**: Scroll info panel up by page
-- **Page Down**: Scroll info panel down by page
-- **Home**: Scroll to top of info panel
-- **End**: Scroll to bottom of info panel
+- **q** or **Q**: Quit the application
+- **r** or **R**: Force refresh display
+- **Tab**: Focus next input field
+- **Shift+Tab**: Focus previous input field
+- **Enter**: Apply changes in input fields (auto-refreshes data)
+- **↑/↓**: Scroll info panel up/down
+- **Mouse wheel**: Zoom in/out on chart (up to zoom in, down to zoom out)
 - **Window resize**: Automatically adjusts layout
 
 ## Examples
@@ -62,9 +63,9 @@ The Battery Logger TUI provides real-time visualization of your battery data wit
 ./battery-logger tui
 ```
 
-### Focus on recent data with faster updates
+### Focus on recent data with custom settings
 ```bash
-./battery-logger tui -window 30m -refresh 2s
+./battery-logger tui -window 30m -alpha 0.1
 ```
 
 ### Long-term analysis with more historical weight
@@ -74,7 +75,7 @@ The Battery Logger TUI provides real-time visualization of your battery data wit
 
 ### High-frequency monitoring
 ```bash
-./battery-logger tui -window 1h -refresh 1s -alpha 0.1
+./battery-logger tui -window 1h -alpha 0.1
 ```
 
 ## Understanding the Predictions
