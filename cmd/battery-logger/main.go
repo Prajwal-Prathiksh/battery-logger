@@ -201,9 +201,9 @@ func tuiCmd() {
 	var refreshStr string
 
 	fs := flag.NewFlagSet("tui", flag.ExitOnError)
-	fs.StringVar(&windowStr, "window", "2h", "rolling window to display & regress (e.g., 10m, 30m, 2h)")
+	fs.StringVar(&windowStr, "window", "6h", "rolling window to display & regress (e.g., 10m, 30m, 2h)")
 	fs.Float64Var(&alpha, "alpha", 0.05, "exponential decay per minute for weights (e.g., 0.05)")
-	fs.StringVar(&refreshStr, "refresh", "5s", "UI refresh period (e.g., 2s, 1s, 5s)")
+	fs.StringVar(&refreshStr, "refresh", "10s", "UI refresh period (e.g., 2s, 1s, 5s)")
 	
 	if len(os.Args) > 2 {
 		fs.Parse(os.Args[2:])
