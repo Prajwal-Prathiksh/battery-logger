@@ -8,7 +8,9 @@ import (
 	"log"
 	"math"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
@@ -26,6 +28,7 @@ import (
 	"github.com/mum4k/termdash/terminal/terminalapi"
 	"github.com/mum4k/termdash/widgets/linechart"
 	"github.com/mum4k/termdash/widgets/text"
+	"github.com/mum4k/termdash/widgets/textinput"
 )
 
 func main() {
@@ -295,16 +298,43 @@ func createTimeBasedSeries(bins []BinDataPoint, startTime time.Time) ([]float64,
 	return acSeries, battSeries, labels
 }
 
-// tuiCmd implements the TUI command using termdash
+// UIParams holds the real-time adjustable parameters
+type UIParams struct {
+	Window  time.Duration
+	Alpha   float64
+	Refresh time.Duration
+	mu      sync.RWMutex
+}
+
+// Get returns thread-safe copies of the parameters
+func (p *UIParams) Get() (time.Duration, float64, time.Duration) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.Window, p.Alpha, p.Refresh
+}
+
+// SetWindow sets the window parameter thread-safely
+func (p *UIParams) SetWindow(window time.Duration) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Window = window
+}
+
+// SetAlpha sets the alpha parameter thread-safely
+func (p *UIParams) SetAlpha(alpha float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Alpha = alpha
+}
+
+// tuiCmd implements the TUI command using termdash with real-time parameter controls
 func tuiCmd() {
 	var windowStr string
 	var alpha float64
-	var refreshStr string
 
 	fs := flag.NewFlagSet("tui", flag.ExitOnError)
 	fs.StringVar(&windowStr, "window", "6h", "rolling window to display & regress (e.g., 10m, 30m, 2h)")
 	fs.Float64Var(&alpha, "alpha", 0.05, "exponential decay per minute for weights (e.g., 0.05)")
-	fs.StringVar(&refreshStr, "refresh", "10s", "UI refresh period (e.g., 2s, 1s, 5s)")
 
 	if len(os.Args) > 2 {
 		fs.Parse(os.Args[2:])
@@ -314,9 +344,12 @@ func tuiCmd() {
 	if err != nil {
 		log.Fatalf("bad -window: %v", err)
 	}
-	refresh, err := time.ParseDuration(refreshStr)
-	if err != nil {
-		log.Fatalf("bad -refresh: %v", err)
+
+	// Initialize UI parameters with defaults - refresh is fixed at 10s
+	uiParams := &UIParams{
+		Window:  window,
+		Alpha:   alpha,
+		Refresh: 10 * time.Second, // Fixed refresh rate
 	}
 
 	// Get the log file path using the config system
@@ -344,13 +377,61 @@ func tuiCmd() {
 		log.Fatalf("text.New => %v", err)
 	}
 
-	// Set up the container with layout
+	// Data update function (declared here so it can be used in callbacks)
+	var updateData func() error
+
+	// Create parameter control widgets with auto-refresh callbacks
+	windowInput, err := textinput.New(
+		textinput.Label("Window (time span to show): ", cell.FgColor(cell.ColorCyan)),
+		textinput.DefaultText(windowStr),
+		textinput.MaxWidthCells(12),
+		textinput.PlaceHolder("e.g., 6h, 30m"),
+		textinput.OnSubmit(func(text string) error {
+			if d, err := time.ParseDuration(text); err == nil {
+				uiParams.SetWindow(d)
+				// Auto-refresh data with new window setting
+				if updateData != nil {
+					if err := updateData(); err != nil {
+						log.Printf("Auto-refresh after window change error: %v", err)
+					}
+				}
+			}
+			return nil
+		}),
+	)
+	if err != nil {
+		log.Fatalf("textinput.New (window) => %v", err)
+	}
+
+	alphaInput, err := textinput.New(
+		textinput.Label("Alpha (decay rate/min): ", cell.FgColor(cell.ColorCyan)),
+		textinput.DefaultText(fmt.Sprintf("%.3f", alpha)),
+		textinput.MaxWidthCells(8),
+		textinput.PlaceHolder("0.001-1.0"),
+		textinput.OnSubmit(func(text string) error {
+			if a, err := strconv.ParseFloat(text, 64); err == nil && a > 0 && a <= 1 {
+				uiParams.SetAlpha(a)
+				// Auto-refresh data with new alpha setting
+				if updateData != nil {
+					if err := updateData(); err != nil {
+						log.Printf("Auto-refresh after alpha change error: %v", err)
+					}
+				}
+			}
+			return nil
+		}),
+	)
+	if err != nil {
+		log.Fatalf("textinput.New (alpha) => %v", err)
+	}
+
+	// Set up the container with layout including controls
 	c, err := container.New(
 		t,
 		container.Border(linestyle.Light),
-		container.BorderTitle("Battery Logger TUI - Tab to switch focus, q to quit, r to refresh"),
-		container.KeyFocusNext(keyboard.KeyTab),         // Tab key for next focus
-		container.KeyFocusPrevious(keyboard.KeyBacktab), // Shift+Tab for previous focus (backtab)
+		container.BorderTitle("Battery Logger TUI - Tab/Shift+Tab: focus, Enter: apply changes, q: quit, r: refresh"),
+		container.KeyFocusNext(keyboard.KeyTab),
+		container.KeyFocusPrevious(keyboard.KeyBacktab),
 		container.SplitHorizontal(
 			container.Top(
 				container.Border(linestyle.Light),
@@ -358,11 +439,29 @@ func tuiCmd() {
 				container.PlaceWidget(chartWidget),
 			),
 			container.Bottom(
-				container.Border(linestyle.Light),
-				container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
-				container.PlaceWidget(textWidget),
+				container.SplitHorizontal(
+					container.Top(
+						container.Border(linestyle.Light),
+						container.BorderTitle("Settings - Press Enter to apply"),
+						container.SplitVertical(
+							container.Left(
+								container.PlaceWidget(windowInput),
+							),
+							container.Right(
+								container.PlaceWidget(alphaInput),
+							),
+							container.SplitPercent(50),
+						),
+					),
+					container.Bottom(
+						container.Border(linestyle.Light),
+						container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
+						container.PlaceWidget(textWidget),
+					),
+					container.SplitFixed(4),
+				),
 			),
-			container.SplitPercent(70),
+			container.SplitPercent(60),
 		),
 	)
 	if err != nil {
@@ -372,8 +471,10 @@ func tuiCmd() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Data update function
-	updateData := func() error {
+	// Data update function - now properly assign to the pre-declared variable
+	updateData = func() error {
+		window, alpha, _ := uiParams.Get()
+
 		rows, err := readCSV(logPath)
 		if err != nil || len(rows) == 0 {
 			textWidget.Write(fmt.Sprintf("Could not read data from %s: %v\n", logPath, err), text.WriteCellOpts(cell.FgColor(cell.ColorRed)))
@@ -413,8 +514,6 @@ func tuiCmd() {
 			acValues = append(acValues, acSeries[i])
 			battValues = append(battValues, battSeries[i])
 		}
-
-		// Set Y-axis range - remove invalid API call
 
 		// Set custom X-axis labels for time - these will be used by termdash for zooming
 		xLabels := labels
@@ -519,6 +618,9 @@ func tuiCmd() {
 			configStr = fmt.Sprintf("📋 Config files: %s (+ %d more)", existingConfigPaths[len(existingConfigPaths)-1], len(existingConfigPaths)-1)
 		}
 
+		// Get current UI parameters for display
+		currentWindow, currentAlpha, _ := uiParams.Get()
+
 		// Write status information
 		statusLines := []string{
 			fmt.Sprintf("%s AC Status: %s%s", acIcon, acStatus, sinceStr),
@@ -526,19 +628,15 @@ func tuiCmd() {
 			fmt.Sprintf("📈 Discharge Rate: %s", slopeStr),
 			fmt.Sprintf("⏱️  Time to 0%%: %s %s", est, confidence),
 			"",
-			fmt.Sprintf("📊 Data Summary (window: %s):", window),
+			fmt.Sprintf("📊 Data Summary (window: %s):", currentWindow),
 			fmt.Sprintf("   Total samples: %d (spanning %s)", totalSamples, timeRange.Round(time.Minute).String()),
 			fmt.Sprintf("   AC plugged: %d samples", acSamples),
 			fmt.Sprintf("   On battery: %d samples", battSamples),
 			fmt.Sprintf("   Time range: %s to %s", startTime, endTime),
 			"",
-			fmt.Sprintf("⚙️  Settings: Alpha=%.3f, Refresh=%s", alpha, refresh),
+			fmt.Sprintf("⚙️  Current Settings: Window=%s, Alpha=%.3f", currentWindow, currentAlpha),
 			fmt.Sprintf("📄 Data file: %s", logPath),
 			configStr,
-			"",
-			"📝 Note: 1) X-axis shows time (HH:MM)",
-			"         2) Green line = AC plugged, Red line = On battery",
-			"         3) Gaps indicate missing data periods",
 		}
 
 		for _, line := range statusLines {
@@ -549,6 +647,8 @@ func tuiCmd() {
 				opts = append(opts, text.WriteCellOpts(cell.FgColor(cell.ColorRed)))
 			} else if strings.HasPrefix(line, "🔋") || strings.HasPrefix(line, "🔌") {
 				opts = append(opts, text.WriteCellOpts(cell.FgColor(cell.ColorYellow)))
+			} else if strings.HasPrefix(line, "⚙️") {
+				opts = append(opts, text.WriteCellOpts(cell.FgColor(cell.ColorCyan)))
 			}
 
 			textWidget.Write(line+"\n", opts...)
@@ -562,16 +662,17 @@ func tuiCmd() {
 		log.Printf("Initial data load error: %v", err)
 	}
 
-	// Set up periodic refresh
-	go func() {
-		ticker := time.NewTicker(refresh)
-		defer ticker.Stop()
+	// Set up periodic refresh with fixed refresh rate
+	_, _, currentRefresh := uiParams.Get()
+	refreshTicker := time.NewTicker(currentRefresh)
+	defer refreshTicker.Stop()
 
+	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-refreshTicker.C:
 				if err := updateData(); err != nil {
 					log.Printf("Data update error: %v", err)
 				}
@@ -592,7 +693,7 @@ func tuiCmd() {
 	}
 
 	// Run the dashboard
-	if err := termdash.Run(ctx, t, c, termdash.KeyboardSubscriber(quitter), termdash.RedrawInterval(refresh)); err != nil {
+	if err := termdash.Run(ctx, t, c, termdash.KeyboardSubscriber(quitter), termdash.RedrawInterval(currentRefresh)); err != nil {
 		log.Fatalf("termdash.Run => %v", err)
 	}
 }
