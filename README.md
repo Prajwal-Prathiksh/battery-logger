@@ -15,24 +15,9 @@ A lightweight Go daemon that logs battery status and power information to CSV fi
 - **Interactive TUI** for real-time data visualization and discharge prediction
 
 ## Installation
-
-### Quick Setup
 ```bash
-# Build, install, and start the service
-make setup
-
-# Or use the install script
+# Using the install script
 ./install.sh
-```
-
-### Manual Installation
-```bash
-# Build and install binary
-make install
-
-# Install and start systemd service
-make install-service
-make start
 ```
 
 ## Usage
@@ -124,55 +109,13 @@ sudo systemctl start battery-logger@$USER.service
 ```
 
 ## Uninstallation
-
-### Quick Uninstall
 ```bash
 # Stop service and remove everything
-make uninstall
-
-# Or use the uninstall script
 ./uninstall.sh
 ```
 
-### Manual Uninstall
-
-**Remove user service:**
-```bash
-# Stop and disable the service
-systemctl --user stop battery-logger.service
-systemctl --user disable battery-logger.service
-
-# Remove service file
-rm -f ~/.config/systemd/user/battery-logger.service
-systemctl --user daemon-reload
-```
-
-**Remove system service (if installed):**
-```bash
-# Stop and disable the service
-sudo systemctl stop battery-logger@$USER.service
-sudo systemctl disable battery-logger@$USER.service
-
-# Remove service file
-sudo rm -f /etc/systemd/system/battery-logger.service
-sudo rm -f /etc/systemd/system/battery-logger@.service
-sudo systemctl daemon-reload
-```
-
-**Remove binary and config files:**
-```bash
-# Remove binary
-sudo rm -f /usr/local/bin/battery-logger
-
-# Remove config files (optional)
-rm -rf ~/.config/battery-logger/
-sudo rm -rf /etc/battery-logger/
-
-# Remove log files (optional - these contain your battery data)
-rm -rf ~/.local/state/battery-logger/
-```
-
-**Note:** Log files in `~/.local/state/battery-logger/` are preserved by default. Remove them manually if you want to delete your battery usage history.
+> [!Note]
+> Log files in `~/.local/state/battery-logger/` are preserved by default. Remove them manually if you want to delete your battery usage history.
 
 ## Development
 
