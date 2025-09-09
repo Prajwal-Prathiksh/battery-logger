@@ -9,11 +9,11 @@ import (
 	"os"
 	"time"
 
-	"battery-logger/internal/analytics"
-	"battery-logger/internal/config"
-	"battery-logger/internal/lock"
-	"battery-logger/internal/logfile"
-	"battery-logger/internal/sysfs"
+	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
+	"github.com/Prajwal-Prathiksh/battery-logger/internal/config"
+	"github.com/Prajwal-Prathiksh/battery-logger/internal/lock"
+	"github.com/Prajwal-Prathiksh/battery-logger/internal/logfile"
+	"github.com/Prajwal-Prathiksh/battery-logger/internal/sysfs"
 
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"

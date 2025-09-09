@@ -1,4 +1,4 @@
-module battery-logger
+module github.com/Prajwal-Prathiksh/battery-logger
 
 go 1.22
 
