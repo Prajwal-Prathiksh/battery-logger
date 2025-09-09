@@ -1,6 +1,8 @@
 # Battery Logger
 
-A lightweight Go daemon that logs battery status and power information to CSV files on Linux systems.
+![Battery Logger TUI Screenshot](assets/battery-logger-tui-screenshot.png)
+
+A lightweight Go daemon that logs battery status and power information to CSV files on Linux systems, and provides an interactive TUI for real-time data visualization and discharge prediction!
 
 ## Features
 
@@ -184,13 +186,3 @@ battery-logger status
 # Clean
 make clean
 ```
-
-## Requirements
-
-- Go 1.19+
-- Linux with `/sys/class/power_supply/`
-- systemd (for service mode)
-
-## License
-
-[Add your license here]
