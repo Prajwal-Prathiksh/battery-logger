@@ -628,8 +628,8 @@ func tuiCmd() {
 		statusLines := []string{
 			fmt.Sprintf("%s AC Status: %s%s", acIcon, acStatus, sinceStr),
 			fmt.Sprintf("🔋 Current Battery: %.1f%%", latest.Batt),
-			fmt.Sprintf("📈 Discharge Rate: %s", slopeStr),
-			fmt.Sprintf("⏱️  Time to 0%%: %s %s", est, confidence),
+			fmt.Sprintf("📈 Discharge Rate: %s %s", slopeStr, confidence),
+			fmt.Sprintf("⏱️  Time to Empty (0%%): %s", est),
 			"",
 			fmt.Sprintf("📊 Data Summary (window: %s):", currentWindow),
 			fmt.Sprintf("   Total samples: %d (spanning %s)", totalSamples, timeRange.Round(time.Minute).String()),
