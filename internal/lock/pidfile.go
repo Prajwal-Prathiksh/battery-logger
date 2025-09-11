@@ -5,10 +5,45 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type PIDFile struct {
 	Path string
+}
+
+// isBatteryLoggerProcess checks if the given PID belongs to a battery-logger process
+func isBatteryLoggerProcess(pid int) bool {
+	// Check if the process exists
+	procPath := fmt.Sprintf("/proc/%d", pid)
+	if _, err := os.Stat(procPath); err != nil {
+		return false
+	}
+
+	// Read the process command name
+	commPath := fmt.Sprintf("/proc/%d/comm", pid)
+	comm, err := os.ReadFile(commPath)
+	if err != nil {
+		return false
+	}
+
+	// Check if it's battery-logger (trim newline)
+	processName := strings.TrimSpace(string(comm))
+	if processName == "battery-logger" {
+		return true
+	}
+
+	// Also check cmdline as a fallback (in case the process name is truncated)
+	cmdlinePath := fmt.Sprintf("/proc/%d/cmdline", pid)
+	cmdline, err := os.ReadFile(cmdlinePath)
+	if err != nil {
+		return false
+	}
+
+	// cmdline is null-separated, so convert nulls to spaces and check
+	cmdlineStr := string(cmdline)
+	cmdlineStr = strings.ReplaceAll(cmdlineStr, "\x00", " ")
+	return strings.Contains(cmdlineStr, "battery-logger")
 }
 
 func (p *PIDFile) Acquire() (bool, error) {
@@ -22,15 +57,15 @@ func (p *PIDFile) Acquire() (bool, error) {
 		_, _ = f.WriteString(strconv.Itoa(os.Getpid()))
 		return true, nil
 	}
-	// If exists, check if process is alive; if not, remove and retry
+	// If exists, check if process is alive and is actually battery-logger; if not, remove and retry
 	b, readErr := os.ReadFile(p.Path)
 	if readErr != nil {
 		return false, readErr
 	}
 	pid, _ := strconv.Atoi(string(b))
 	if pid > 0 {
-		if _, statErr := os.Stat(fmt.Sprintf("/proc/%d", pid)); statErr == nil {
-			// Alive
+		if isBatteryLoggerProcess(pid) {
+			// Another battery-logger instance is actually running
 			return false, nil
 		}
 	}
