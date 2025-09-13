@@ -1,6 +1,6 @@
 # Battery Logger
 
-![Battery Logger TUI Screenshot](assets/battery-logger-tui-v2-screenshot.png)
+![Battery Logger TUI Screenshot](assets/battery-logger-tui-v3-screenshot.png)
 
 A lightweight Go daemon that logs battery status and power information to CSV files on Linux systems, and provides an interactive TUI for real-time data visualization and discharge prediction!
 
