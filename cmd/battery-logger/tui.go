@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,28 +23,19 @@ import (
 	"github.com/mum4k/termdash/terminal/tcell"
 	"github.com/mum4k/termdash/terminal/terminalapi"
 	"github.com/mum4k/termdash/widgets/text"
-	"github.com/mum4k/termdash/widgets/textinput"
 )
 
 // UIParams holds the real-time adjustable parameters
 type UIParams struct {
-	Alpha   float64
 	Refresh time.Duration
 	mu      sync.RWMutex
 }
 
 // Get returns thread-safe copies of the parameters
-func (p *UIParams) Get() (float64, time.Duration) {
+func (p *UIParams) Get() time.Duration {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.Alpha, p.Refresh
-}
-
-// SetAlpha sets the alpha parameter thread-safely
-func (p *UIParams) SetAlpha(alpha float64) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.Alpha = alpha
+	return p.Refresh
 }
 
 // StatusInfo holds information needed for status display
@@ -89,39 +79,12 @@ func createTextWidget() (*text.Text, error) {
 	return text.New(text.WrapAtWords())
 }
 
-// createInputWidgets creates the parameter input widgets with callbacks
-func createInputWidgets(alpha float64, uiParams *UIParams, updateData *func() error) (*textinput.TextInput, error) {
-	alphaInput, err := textinput.New(
-		textinput.Label("Alpha (decay rate/min): ", cell.FgColor(cell.ColorCyan)),
-		textinput.DefaultText(fmt.Sprintf("%.3f", alpha)),
-		textinput.MaxWidthCells(8),
-		textinput.PlaceHolder("0.001-1.0"),
-		textinput.OnSubmit(func(text string) error {
-			if a, err := strconv.ParseFloat(text, 64); err == nil && a > 0 && a <= 1 {
-				uiParams.SetAlpha(a)
-				// Auto-refresh data with new alpha setting
-				if *updateData != nil {
-					if err := (*updateData)(); err != nil {
-						log.Printf("Auto-refresh after alpha change error: %v", err)
-					}
-				}
-			}
-			return nil
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("creating alpha input: %v", err)
-	}
-
-	return alphaInput, nil
-}
-
 // createUILayout creates the TUI container layout with all widgets
-func createUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, textWidget *text.Text, alphaInput *textinput.TextInput) (*container.Container, error) {
+func createUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, textWidget *text.Text) (*container.Container, error) {
 	return container.New(
 		t,
 		container.Border(linestyle.Light),
-		container.BorderTitle("Battery Logger TUI - Tab/Shift+Tab: focus, Enter: apply changes, q: quit, r: refresh"),
+		container.BorderTitle("Battery Logger TUI - Tab/Shift+Tab: focus, q: quit, r: refresh"),
 		container.KeyFocusNext(keyboard.KeyTab),
 		container.KeyFocusPrevious(keyboard.KeyBacktab),
 		container.SplitHorizontal(
@@ -132,21 +95,11 @@ func createUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, t
 				container.PlaceWidget(chartWidget),
 			),
 			container.Bottom(
-				container.SplitHorizontal(
-					container.Top(
-						container.Border(linestyle.Light),
-						container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
-						container.PlaceWidget(textWidget),
-					),
-					container.Bottom(
-						container.Border(linestyle.Light),
-						container.BorderTitle("Settings - Press Enter to apply"),
-						container.PlaceWidget(alphaInput),
-					),
-					container.SplitFixedFromEnd(4),
-				),
+				container.Border(linestyle.Light),
+				container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
+				container.PlaceWidget(textWidget),
 			),
-			container.SplitPercent(60),
+			container.SplitPercent(70),
 		),
 	)
 }
@@ -411,10 +364,8 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 }
 
 // setupDataRefresh sets up periodic data refresh and returns the update function
-func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.BatteryChart, textWidget *text.Text, cfg config.Config, c *container.Container) (func() error, error) {
+func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.BatteryChart, textWidget *text.Text, cfg config.Config, c *container.Container, alpha float64) (func() error, error) {
 	updateData := func() error {
-		alpha, _ := uiParams.Get()
-
 		rows, err := readCSV(logPath)
 		if err != nil || len(rows) == 0 {
 			textWidget.Write(fmt.Sprintf("Could not read data from %s: %v\n", logPath, err), text.WriteCellOpts(cell.FgColor(cell.ColorRed)))
@@ -451,7 +402,7 @@ func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, c
 	}
 
 	// Set up periodic refresh
-	_, currentRefresh := uiParams.Get()
+	currentRefresh := uiParams.Get()
 	refreshTicker := time.NewTicker(currentRefresh)
 
 	go func() {
@@ -498,7 +449,6 @@ func runTUI() {
 
 	// Initialize UI parameters with defaults - refresh is fixed at 10s
 	uiParams := &UIParams{
-		Alpha:   alpha,
 		Refresh: 10 * time.Second, // Fixed refresh rate
 	}
 
@@ -523,14 +473,8 @@ func runTUI() {
 	// Data update function (declared here so it can be used in callbacks)
 	var updateData func() error
 
-	// Create parameter control widgets with auto-refresh callbacks
-	alphaInput, err := createInputWidgets(alpha, uiParams, &updateData)
-	if err != nil {
-		log.Fatalf("createInputWidgets => %v", err)
-	}
-
-	// Set up the container with layout including controls
-	c, err := createUILayout(t, chartWidget, textWidget, alphaInput)
+	// Set up the container with layout
+	c, err := createUILayout(t, chartWidget, textWidget)
 	if err != nil {
 		log.Fatalf("createUILayout => %v", err)
 	}
@@ -544,7 +488,7 @@ func runTUI() {
 	defer cancel()
 
 	// Set up data refresh and get the update function
-	updateData, err = setupDataRefresh(ctx, logPath, uiParams, chartWidget, textWidget, cfg, c)
+	updateData, err = setupDataRefresh(ctx, logPath, uiParams, chartWidget, textWidget, cfg, c, alpha)
 	if err != nil {
 		log.Fatalf("setupDataRefresh => %v", err)
 	}
@@ -558,7 +502,7 @@ func runTUI() {
 	keyboardHandler := createKeyboardHandler(cancel, updateData)
 
 	// Run the dashboard
-	_, currentRefresh := uiParams.Get()
+	currentRefresh := uiParams.Get()
 	if err := termdash.Run(ctx, t, c, termdash.KeyboardSubscriber(keyboardHandler), termdash.RedrawInterval(currentRefresh)); err != nil {
 		log.Fatalf("termdash.Run => %v", err)
 	}
