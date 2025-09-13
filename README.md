@@ -45,7 +45,7 @@ battery-logger tui -window 30m -alpha 0.1
 **Features:**
 - 📊 Interactive line chart with mouse zoom support and real-time controls
 - 🧮 Smart discharge rate calculation using weighted regression
-- ⏱️ Time-to-empty predictions based on recent unplugged sessions
+- ⏱️ Time-to-empty/full predictions based on recent unplugged/charging sessions
 - 📈 Data insights and sample statistics
 - ⌨️ Real-time parameter adjustment (Tab/Enter to change settings, q to quit, r to refresh)
 
@@ -76,7 +76,11 @@ log_dir = "~/.local/state/battery-logger"
 log_file = "battery.csv"
 max_lines = 1000            # Max lines before rotation
 trim_buffer = 100           # Buffer for trimming
+max_charge_percent = 100     # Maximum charge target (useful for battery longevity)
 ```
+
+> [!IMPORTANT]
+> The `max_charge_percent` setting is for calculation purposes only. It does not control your battery's actual charging threshold - you must configure that separately via BIOS, system settings, or hardware-specific tools. This setting only helps the TUI provide accurate time-to-full predictions based on your configured charge limit.
 
 ## Output
 

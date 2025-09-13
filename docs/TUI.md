@@ -34,7 +34,8 @@ The Battery Logger TUI provides real-time visualization of your battery data wit
 ### 🧮 Smart Predictions
 - **Discharge rate calculation** using weighted linear regression
 - **Time-to-empty estimation** based on current discharge patterns
-- **Contiguous session analysis** focusing on most recent unplugged period
+- **Time-to-full estimation** with configurable charge targets (respects `max_charge_percent` setting)
+- **Contiguous session analysis** focusing on most recent unplugged/charging period
 - **Confidence indicators** showing sample size used for predictions
 - **AC transition tracking** with time and battery level when status changed
 
@@ -80,25 +81,28 @@ The Battery Logger TUI provides real-time visualization of your battery data wit
 
 ## Understanding the Predictions
 
-The TUI uses **weighted linear regression** to predict battery discharge:
+The TUI uses **weighted linear regression** to predict battery discharge and charging:
 
-1. **Only the most recent contiguous unplugged session** is used for discharge prediction
+1. **Only the most recent contiguous session** is used for prediction (unplugged for discharge, plugged for charging)
 2. **Recent data points** have higher weight in the calculation (exponential decay)
 3. **Alpha parameter** controls how quickly weights decay over time
 4. **Time-to-empty** is calculated using current battery level and discharge rate
-5. **Transition tracking** identifies when current AC status started
+5. **Time-to-full** uses the configured maximum charge target (`max_charge_percent` from config)
+6. **Transition tracking** identifies when current AC status started
 
 ### Algorithm Details
-- **Contiguous session analysis**: Walks backward from latest data to find the most recent uninterrupted unplugged period
+- **Contiguous session analysis**: Walks backward from latest data to find the most recent uninterrupted session (unplugged or plugged)
 - **Weighted regression**: Recent samples get exponentially higher weights based on alpha parameter
 - **Real-time prediction**: Uses actual current battery level, not regression intercept
+- **Configurable charge target**: Time-to-full predictions respect the `max_charge_percent` configuration (e.g., 80% instead of 100%)
 - **Status transitions**: Tracks AC plug/unplug events with timestamps and battery levels
 
 ### Prediction Accuracy
-- **More reliable** with longer unplugged sessions (≥2 samples required)
-- **Most accurate** during consistent battery usage patterns
+- **More reliable** with longer contiguous sessions (≥2 samples required for either charging or discharging)
+- **Most accurate** during consistent battery usage or charging patterns
 - **Less reliable** immediately after AC transitions
-- **Best results** with steady discharge rates and sufficient unplugged data
+- **Best results** with steady discharge/charge rates and sufficient session data
+- **Charge predictions** depend on configured maximum charge target and charging behavior
 
 ## Troubleshooting
 
@@ -108,11 +112,13 @@ The TUI uses **weighted linear regression** to predict battery discharge:
 - Verify data file exists: `~/.local/state/battery-logger/battery.csv`
 - Ensure battery-logger has been collecting data for some time
 
-### "Need ≥2 unplugged samples"
-- Wait for more battery-only data points to be collected
+### "Need ≥2 charging/discharging samples"
+- Wait for more data points to be collected in the current session (charging or discharging)
 - Increase the `-window` to include more historical data
-- Check if you've had recent unplugged sessions longer than the sampling interval
-- Verify the service is actively logging during unplugged periods
+- Check if you've had recent sessions longer than the sampling interval
+- Verify the service is actively logging during both plugged and unplugged periods
+- For charging predictions: ensure you have sufficient charging session data
+- For discharge predictions: ensure you have sufficient unplugged session data
 
 ### "∞ (not discharging or charging)" or poor predictions
 - This appears when discharge rate is near zero or positive
