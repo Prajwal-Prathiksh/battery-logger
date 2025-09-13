@@ -80,8 +80,8 @@ type StatusInfo struct {
 }
 
 // createChartWidget creates and configures the time chart widget
-func createChartWidget() *widgets.TimeChart {
-	return widgets.NewTimeChart(
+func createChartWidget() *widgets.BatteryChart {
+	return widgets.CreateBatteryChart(
 		widgets.YRange(0, 100),
 		widgets.YLabel("%"),
 		widgets.Title("Battery % Over Time"),
@@ -148,7 +148,7 @@ func createInputWidgets(windowStr string, alpha float64, uiParams *UIParams, upd
 }
 
 // createUILayout creates the TUI container layout with all widgets
-func createUILayout(t terminalapi.Terminal, chartWidget *widgets.TimeChart, textWidget *text.Text, windowInput, alphaInput *textinput.TextInput) (*container.Container, error) {
+func createUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, textWidget *text.Text, windowInput, alphaInput *textinput.TextInput) (*container.Container, error) {
 	return container.New(
 		t,
 		container.Border(linestyle.Light),
@@ -189,8 +189,8 @@ func createUILayout(t terminalapi.Terminal, chartWidget *widgets.TimeChart, text
 	)
 }
 
-// processChartData converts battery data to TimeChart format - much simpler!
-func processChartData(rows []analytics.Row, window time.Duration) ([]widgets.TimeSeries, error) {
+// processChartData converts battery data to BatteryChart format - much simpler!
+func processChartData(rows []analytics.Row) ([]widgets.TimeSeries, error) {
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("no data available")
 	}
@@ -236,10 +236,9 @@ func processChartData(rows []analytics.Row, window time.Duration) ([]widgets.Tim
 }
 
 // updateChartWidget updates the chart widget with new data - much simpler!
-func updateChartWidget(chartWidget *widgets.TimeChart, series []widgets.TimeSeries, window time.Duration) error {
-	// Clear and set new data
+func updateChartWidget(chartWidget *widgets.BatteryChart, series []widgets.TimeSeries) error {
+	// Clear and set new data - no window setting needed
 	chartWidget.ClearSeries()
-	chartWidget.SetWindow(window)
 	chartWidget.SetSeries(series)
 	return nil
 }
@@ -435,9 +434,9 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 }
 
 // setupDataRefresh sets up periodic data refresh and returns the update function
-func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.TimeChart, textWidget *text.Text, cfg config.Config) (func() error, error) {
+func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.BatteryChart, textWidget *text.Text, cfg config.Config) (func() error, error) {
 	updateData := func() error {
-		window, alpha, _ := uiParams.Get()
+		_, alpha, _ := uiParams.Get()
 
 		rows, err := readCSV(logPath)
 		if err != nil || len(rows) == 0 {
@@ -446,21 +445,20 @@ func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, c
 			return nil
 		}
 
-		rows = analytics.FilterWindow(rows, window)
 		if len(rows) == 0 {
-			textWidget.Write("No recent data in window.\n", text.WriteCellOpts(cell.FgColor(cell.ColorYellow)))
+			textWidget.Write("No data available.\n", text.WriteCellOpts(cell.FgColor(cell.ColorYellow)))
 			textWidget.Write("Press q to quit, r to refresh\n")
 			return nil
 		}
 
-		// Process chart data
-		series, err := processChartData(rows, window)
+		// Process chart data - no filtering, keep all data points
+		series, err := processChartData(rows)
 		if err != nil {
 			return fmt.Errorf("processing chart data: %v", err)
 		}
 
-		// Update chart
-		if err := updateChartWidget(chartWidget, series, window); err != nil {
+		// Update chart - no window parameter needed
+		if err := updateChartWidget(chartWidget, series); err != nil {
 			return fmt.Errorf("updating chart: %v", err)
 		}
 

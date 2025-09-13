@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/mum4k/termdash/cell"
+	"github.com/mum4k/termdash/keyboard"
+	"github.com/mum4k/termdash/mouse"
 	"github.com/mum4k/termdash/private/canvas"
 	"github.com/mum4k/termdash/private/canvas/braille"
 	"github.com/mum4k/termdash/private/draw"
@@ -29,10 +31,9 @@ type TimeSeries struct {
 	Color  cell.Color
 }
 
-// TimeChart is a time-aware chart widget with day/night backgrounds
-type TimeChart struct {
+// BatteryChart is a time-aware chart widget with day/night backgrounds and zoom functionality
+type BatteryChart struct {
 	series []TimeSeries
-	window time.Duration
 	yMin   float64
 	yMax   float64
 	yLabel string
@@ -47,27 +48,44 @@ type TimeChart struct {
 	// Date annotation settings
 	showDates     bool
 	dateThreshold time.Duration // minimum window size to show dates
+
+	// Zoom and navigation state
+	baseWindow    time.Duration // base window size (10h default)
+	currentWindow time.Duration // current zoomed window
+	windowStart   time.Time     // start time of current view
+	windowEnd     time.Time     // end time of current view
+
+	// Mouse state for drag selection
+	isDragging bool
+	dragStart  image.Point
+	dragEnd    image.Point
+
+	// Zoom parameters
+	zoomStep  float64       // zoom step percentage (0.1 = 10%)
+	minWindow time.Duration // minimum zoom window (5m)
+	maxWindow time.Duration // maximum zoom window (7d)
 }
 
-// TimeChartOption is used to configure the TimeChart
-type TimeChartOption interface {
-	set(*TimeChart)
+// BatteryChartOption is used to configure the BatteryChart
+type BatteryChartOption interface {
+	set(*BatteryChart)
 }
 
-type timeChartOption func(*TimeChart)
+type batteryChartOption func(*BatteryChart)
 
-func (o timeChartOption) set(tc *TimeChart) {
+func (o batteryChartOption) set(tc *BatteryChart) {
 	o(tc)
 }
 
-// NewTimeChart creates a new time-aware chart widget
-func NewTimeChart(opts ...TimeChartOption) *TimeChart {
-	tc := &TimeChart{
-		window: 24 * time.Hour,
-		yMin:   0,
-		yMax:   100,
-		yLabel: "Battery %",
-		title:  "Battery Over Time",
+// CreateBatteryChart creates a time-aware chart widget with zoom functionality
+func CreateBatteryChart(opts ...BatteryChartOption) *BatteryChart {
+	tc := &BatteryChart{
+		baseWindow:    24 * time.Hour,
+		currentWindow: 24 * time.Hour,
+		yMin:          0,
+		yMax:          100,
+		yLabel:        "Battery %",
+		title:         "Battery Over Time",
 
 		// High contrast day/night color palette
 		dayColor:   cell.ColorNumber(237), // Dark gray for day (darker but still distinguishable)
@@ -78,7 +96,17 @@ func NewTimeChart(opts ...TimeChartOption) *TimeChart {
 		// Date annotation settings
 		showDates:     true,
 		dateThreshold: 0, // Always show dates regardless of window size
+
+		// Zoom parameters
+		zoomStep:  0.1,                // 10% zoom steps
+		minWindow: 5 * time.Minute,    // minimum 5 minutes
+		maxWindow: 7 * 24 * time.Hour, // maximum 7 days
 	}
+
+	// Initialize current view to the base window
+	now := time.Now()
+	tc.windowEnd = now
+	tc.windowStart = now.Add(-tc.baseWindow)
 
 	for _, opt := range opts {
 		opt.set(tc)
@@ -88,52 +116,53 @@ func NewTimeChart(opts ...TimeChartOption) *TimeChart {
 }
 
 // Option functions
-func Window(d time.Duration) TimeChartOption {
-	return timeChartOption(func(tc *TimeChart) {
-		tc.window = d
+func Window(d time.Duration) BatteryChartOption {
+	return batteryChartOption(func(tc *BatteryChart) {
+		tc.baseWindow = d
+		tc.currentWindow = d
 	})
 }
 
-func YRange(min, max float64) TimeChartOption {
-	return timeChartOption(func(tc *TimeChart) {
+func YRange(min, max float64) BatteryChartOption {
+	return batteryChartOption(func(tc *BatteryChart) {
 		tc.yMin = min
 		tc.yMax = max
 	})
 }
 
-func YLabel(label string) TimeChartOption {
-	return timeChartOption(func(tc *TimeChart) {
+func YLabel(label string) BatteryChartOption {
+	return batteryChartOption(func(tc *BatteryChart) {
 		tc.yLabel = label
 	})
 }
 
-func Title(title string) TimeChartOption {
-	return timeChartOption(func(tc *TimeChart) {
+func Title(title string) BatteryChartOption {
+	return batteryChartOption(func(tc *BatteryChart) {
 		tc.title = title
 	})
 }
 
-func DayNightColors(day, night cell.Color) TimeChartOption {
-	return timeChartOption(func(tc *TimeChart) {
+func DayNightColors(day, night cell.Color) BatteryChartOption {
+	return batteryChartOption(func(tc *BatteryChart) {
 		tc.dayColor = day
 		tc.nightColor = night
 	})
 }
 
-func DayHours(start, end int) TimeChartOption {
-	return timeChartOption(func(tc *TimeChart) {
+func DayHours(start, end int) BatteryChartOption {
+	return batteryChartOption(func(tc *BatteryChart) {
 		tc.dayStart = start
 		tc.dayEnd = end
 	})
 }
 
 // SetSeries sets the data series for the chart
-func (tc *TimeChart) SetSeries(series []TimeSeries) {
+func (tc *BatteryChart) SetSeries(series []TimeSeries) {
 	tc.series = series
 }
 
 // AddSeries adds a single series to the chart
-func (tc *TimeChart) AddSeries(name string, points []TimePoint, color cell.Color) {
+func (tc *BatteryChart) AddSeries(name string, points []TimePoint, color cell.Color) {
 	tc.series = append(tc.series, TimeSeries{
 		Name:   name,
 		Points: points,
@@ -142,17 +171,22 @@ func (tc *TimeChart) AddSeries(name string, points []TimePoint, color cell.Color
 }
 
 // ClearSeries removes all series from the chart
-func (tc *TimeChart) ClearSeries() {
+func (tc *BatteryChart) ClearSeries() {
 	tc.series = tc.series[:0]
 }
 
-// SetWindow updates the time window for the chart
-func (tc *TimeChart) SetWindow(window time.Duration) {
-	tc.window = window
+// SetWindow updates the base time window for the chart
+func (tc *BatteryChart) SetWindow(window time.Duration) {
+	tc.baseWindow = window
+	tc.currentWindow = window
+	// Update window times
+	now := time.Now()
+	tc.windowEnd = now
+	tc.windowStart = now.Add(-window)
 }
 
 // Draw implements widgetapi.Widget.Draw
-func (tc *TimeChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
+func (tc *BatteryChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 	if len(tc.series) == 0 {
 		return draw.Text(cvs, "No data", image.Point{1, 1})
 	}
@@ -177,9 +211,9 @@ func (tc *TimeChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 		return draw.ResizeNeeded(cvs)
 	}
 
-	// Calculate time range
-	endTime := time.Now()
-	startTime := endTime.Add(-tc.window)
+	// Calculate time range - use current zoom window
+	endTime := tc.windowEnd
+	startTime := tc.windowStart
 
 	// Draw day/night background
 	if err := tc.drawDayNightBackground(cvs, plotArea, startTime, endTime); err != nil {
@@ -235,7 +269,7 @@ func (tc *TimeChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 }
 
 // drawDayNightBackground draws alternating day/night background colors
-func (tc *TimeChart) drawDayNightBackground(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
+func (tc *BatteryChart) drawDayNightBackground(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
 	timeSpan := endTime.Sub(startTime)
 	if timeSpan <= 0 {
 		return nil
@@ -265,7 +299,7 @@ func (tc *TimeChart) drawDayNightBackground(cvs *canvas.Canvas, plotArea image.R
 }
 
 // drawAxes draws the X and Y axes
-func (tc *TimeChart) drawAxes(cvs *canvas.Canvas, area, plotArea image.Rectangle) error {
+func (tc *BatteryChart) drawAxes(cvs *canvas.Canvas, area, plotArea image.Rectangle) error {
 	// Y-axis (left side)
 	yAxisLine := []draw.HVLine{{
 		Start: image.Point{plotArea.Min.X - 1, plotArea.Min.Y},
@@ -286,7 +320,7 @@ func (tc *TimeChart) drawAxes(cvs *canvas.Canvas, area, plotArea image.Rectangle
 }
 
 // drawYLabels draws Y-axis value labels
-func (tc *TimeChart) drawYLabels(cvs *canvas.Canvas, plotArea image.Rectangle) error {
+func (tc *BatteryChart) drawYLabels(cvs *canvas.Canvas, plotArea image.Rectangle) error {
 	height := plotArea.Dy()
 	if height < 3 {
 		return nil
@@ -314,7 +348,7 @@ func (tc *TimeChart) drawYLabels(cvs *canvas.Canvas, plotArea image.Rectangle) e
 }
 
 // drawXLabels draws X-axis time labels
-func (tc *TimeChart) drawXLabels(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
+func (tc *BatteryChart) drawXLabels(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
 	width := plotArea.Dx()
 	if width < 10 {
 		return nil
@@ -322,11 +356,11 @@ func (tc *TimeChart) drawXLabels(cvs *canvas.Canvas, plotArea image.Rectangle, s
 
 	// Determine label frequency based on window size
 	var labelInterval time.Duration
-	if tc.window <= 2*time.Hour {
+	if tc.currentWindow <= 2*time.Hour {
 		labelInterval = 30 * time.Minute
-	} else if tc.window <= 12*time.Hour {
+	} else if tc.currentWindow <= 12*time.Hour {
 		labelInterval = 2 * time.Hour
-	} else if tc.window <= 48*time.Hour {
+	} else if tc.currentWindow <= 48*time.Hour {
 		labelInterval = 6 * time.Hour
 	} else {
 		labelInterval = 12 * time.Hour
@@ -345,7 +379,7 @@ func (tc *TimeChart) drawXLabels(cvs *canvas.Canvas, plotArea image.Rectangle, s
 		}
 
 		var label string
-		if tc.window <= 12*time.Hour {
+		if tc.currentWindow <= 12*time.Hour {
 			label = t.Format("15:04")
 		} else {
 			label = t.Format("15:04")
@@ -359,7 +393,7 @@ func (tc *TimeChart) drawXLabels(cvs *canvas.Canvas, plotArea image.Rectangle, s
 }
 
 // drawDateLabels draws date stamps above the chart (no vertical lines)
-func (tc *TimeChart) drawDateLabels(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
+func (tc *BatteryChart) drawDateLabels(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
 	timeSpan := endTime.Sub(startTime)
 	width := plotArea.Dx()
 
@@ -391,7 +425,7 @@ func (tc *TimeChart) drawDateLabels(cvs *canvas.Canvas, plotArea image.Rectangle
 }
 
 // drawDayBreakLines draws bright dashed vertical lines at midnight (drawn on top)
-func (tc *TimeChart) drawDayBreakLines(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
+func (tc *BatteryChart) drawDayBreakLines(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
 	timeSpan := endTime.Sub(startTime)
 	width := plotArea.Dx()
 
@@ -425,7 +459,7 @@ func (tc *TimeChart) drawDayBreakLines(cvs *canvas.Canvas, plotArea image.Rectan
 }
 
 // drawSeries draws a single data series using braille canvas with proper gap handling
-func (tc *TimeChart) drawSeries(bc *braille.Canvas, plotArea image.Rectangle, series TimeSeries, startTime, endTime time.Time) error {
+func (tc *BatteryChart) drawSeries(bc *braille.Canvas, plotArea image.Rectangle, series TimeSeries, startTime, endTime time.Time) error {
 	if len(series.Points) == 0 {
 		return nil
 	}
@@ -493,7 +527,7 @@ func (tc *TimeChart) drawSeries(bc *braille.Canvas, plotArea image.Rectangle, se
 }
 
 // copyBrailleWithBackground copies braille canvas while preserving day/night background colors
-func (tc *TimeChart) copyBrailleWithBackground(bc *braille.Canvas, cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
+func (tc *BatteryChart) copyBrailleWithBackground(bc *braille.Canvas, cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
 	timeSpan := endTime.Sub(startTime)
 	if timeSpan <= 0 {
 		return bc.CopyTo(cvs)
@@ -524,19 +558,111 @@ func (tc *TimeChart) copyBrailleWithBackground(bc *braille.Canvas, cvs *canvas.C
 }
 
 // Keyboard implements widgetapi.Widget.Keyboard
-func (tc *TimeChart) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventMeta) error {
+func (tc *BatteryChart) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventMeta) error {
+	switch k.Key {
+	case keyboard.KeyArrowLeft:
+		// Pan left (backward in time)
+		return tc.pan(false)
+	case keyboard.KeyArrowRight:
+		// Pan right (forward in time)
+		return tc.pan(true)
+	case keyboard.KeyEsc:
+		// Reset zoom to base window
+		tc.currentWindow = tc.baseWindow
+		now := time.Now()
+		tc.windowEnd = now
+		tc.windowStart = now.Add(-tc.baseWindow)
+		return nil
+	}
 	return nil
 }
 
 // Mouse implements widgetapi.Widget.Mouse
-func (tc *TimeChart) Mouse(m *terminalapi.Mouse, meta *widgetapi.EventMeta) error {
+func (tc *BatteryChart) Mouse(m *terminalapi.Mouse, meta *widgetapi.EventMeta) error {
+	switch m.Button {
+	case mouse.ButtonWheelUp:
+		// Zoom in (reduce window size)
+		return tc.zoom(true, m.Position)
+	case mouse.ButtonWheelDown:
+		// Zoom out (increase window size)
+		return tc.zoom(false, m.Position)
+	case mouse.ButtonLeft:
+		// Start drag selection
+		tc.isDragging = true
+		tc.dragStart = m.Position
+		tc.dragEnd = m.Position
+	case mouse.ButtonRelease:
+		// End drag selection and zoom to selected area
+		if tc.isDragging {
+			tc.isDragging = false
+			return tc.zoomToSelection()
+		}
+	}
+
+	// Update drag end position while dragging
+	if tc.isDragging && m.Button == mouse.ButtonLeft {
+		tc.dragEnd = m.Position
+	}
+
 	return nil
 }
 
 // Options implements widgetapi.Widget.Options
-func (tc *TimeChart) Options() widgetapi.Options {
+func (tc *BatteryChart) Options() widgetapi.Options {
 	return widgetapi.Options{
-		WantKeyboard: widgetapi.KeyScopeNone,
-		WantMouse:    widgetapi.MouseScopeNone,
+		WantKeyboard: widgetapi.KeyScopeGlobal,
+		WantMouse:    widgetapi.MouseScopeGlobal,
 	}
+}
+
+// zoom handles mouse wheel zoom in/out
+func (tc *BatteryChart) zoom(zoomIn bool, position image.Point) error {
+	if zoomIn {
+		// Zoom in: reduce window size
+		newWindow := time.Duration(float64(tc.currentWindow) * (1.0 - tc.zoomStep))
+		if newWindow < tc.minWindow {
+			newWindow = tc.minWindow
+		}
+		tc.currentWindow = newWindow
+	} else {
+		// Zoom out: increase window size
+		newWindow := time.Duration(float64(tc.currentWindow) * (1.0 + tc.zoomStep))
+		if newWindow > tc.maxWindow {
+			newWindow = tc.maxWindow
+		}
+		tc.currentWindow = newWindow
+	}
+
+	// Update window times (keep end time, adjust start time)
+	tc.windowStart = tc.windowEnd.Add(-tc.currentWindow)
+	return nil
+}
+
+// zoomToSelection zooms to the time range selected by mouse drag
+func (tc *BatteryChart) zoomToSelection() error {
+	if tc.dragStart.X == tc.dragEnd.X {
+		// No selection made, ignore
+		return nil
+	}
+
+	// TODO: Convert pixel coordinates to time range and update windowStart/windowEnd
+	// For now, just clear the drag state
+	tc.isDragging = false
+	return nil
+}
+
+// pan moves the view left/right while maintaining zoom level
+func (tc *BatteryChart) pan(right bool) error {
+	// Pan distance is 10% of current window
+	panDistance := time.Duration(float64(tc.currentWindow) * 0.1)
+
+	if right {
+		tc.windowStart = tc.windowStart.Add(panDistance)
+		tc.windowEnd = tc.windowEnd.Add(panDistance)
+	} else {
+		tc.windowStart = tc.windowStart.Add(-panDistance)
+		tc.windowEnd = tc.windowEnd.Add(-panDistance)
+	}
+
+	return nil
 }
