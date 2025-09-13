@@ -414,16 +414,24 @@ func (tc *BatteryChart) drawXLabels(cvs *canvas.Canvas, plotArea image.Rectangle
 		return nil
 	}
 
-	// Determine label frequency based on window size
+	// Determine label frequency based on window size with more granular intervals
 	var labelInterval time.Duration
-	if tc.currentWindow <= 2*time.Hour {
+	if tc.currentWindow <= 30*time.Minute {
+		labelInterval = 5 * time.Minute
+	} else if tc.currentWindow <= 2*time.Hour {
+		labelInterval = 15 * time.Minute
+	} else if tc.currentWindow <= 4*time.Hour {
 		labelInterval = 30 * time.Minute
-	} else if tc.currentWindow <= 12*time.Hour {
+	} else if tc.currentWindow <= 8*time.Hour {
+		labelInterval = 1 * time.Hour
+	} else if tc.currentWindow <= 24*time.Hour {
 		labelInterval = 2 * time.Hour
 	} else if tc.currentWindow <= 48*time.Hour {
-		labelInterval = 6 * time.Hour
-	} else {
+		labelInterval = 4 * time.Hour
+	} else if tc.currentWindow <= 7*24*time.Hour { // 1 week
 		labelInterval = 12 * time.Hour
+	} else {
+		labelInterval = 24 * time.Hour
 	}
 
 	// Draw time labels
@@ -439,9 +447,11 @@ func (tc *BatteryChart) drawXLabels(cvs *canvas.Canvas, plotArea image.Rectangle
 		}
 
 		var label string
-		if tc.currentWindow <= 12*time.Hour {
+		if tc.currentWindow <= 4*time.Hour {
+			// For very short windows, show minutes too
 			label = t.Format("15:04")
 		} else {
+			// For longer windows, just show time
 			label = t.Format("15:04")
 		}
 
