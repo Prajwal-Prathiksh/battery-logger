@@ -5,9 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +13,7 @@ import (
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/config"
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/sysfs"
+	"github.com/Prajwal-Prathiksh/battery-logger/internal/widgets"
 
 	"github.com/mum4k/termdash"
 	"github.com/mum4k/termdash/cell"
@@ -23,38 +22,20 @@ import (
 	"github.com/mum4k/termdash/linestyle"
 	"github.com/mum4k/termdash/terminal/tcell"
 	"github.com/mum4k/termdash/terminal/terminalapi"
-	"github.com/mum4k/termdash/widgets/linechart"
 	"github.com/mum4k/termdash/widgets/text"
-	"github.com/mum4k/termdash/widgets/textinput"
 )
 
 // UIParams holds the real-time adjustable parameters
 type UIParams struct {
-	Window  time.Duration
-	Alpha   float64
 	Refresh time.Duration
 	mu      sync.RWMutex
 }
 
 // Get returns thread-safe copies of the parameters
-func (p *UIParams) Get() (time.Duration, float64, time.Duration) {
+func (p *UIParams) Get() time.Duration {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.Window, p.Alpha, p.Refresh
-}
-
-// SetWindow sets the window parameter thread-safely
-func (p *UIParams) SetWindow(window time.Duration) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.Window = window
-}
-
-// SetAlpha sets the alpha parameter thread-safely
-func (p *UIParams) SetAlpha(alpha float64) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.Alpha = alpha
+	return p.Refresh
 }
 
 // StatusInfo holds information needed for status display
@@ -73,22 +54,23 @@ type StatusInfo struct {
 	StartTime        string
 	EndTime          string
 	ConfigStr        string
-	CurrentWindow    time.Duration
 	LogPath          string
 	MaxChargePercent int
 	CycleCount       int
 	HasCycleCount    bool
 }
 
-// createChartWidget creates and configures the line chart widget
-func createChartWidget() (*linechart.LineChart, error) {
-	return linechart.New(
-		linechart.AxesCellOpts(cell.FgColor(cell.ColorWhite)),
-		linechart.YLabelCellOpts(cell.FgColor(cell.ColorCyan)),
-		linechart.XLabelCellOpts(cell.FgColor(cell.ColorCyan)),
-		linechart.YAxisCustomScale(0, 100),
-		linechart.YAxisFormattedValues(linechart.ValueFormatterRoundWithSuffix("%")),
-		linechart.ZoomStepPercent(5),
+// createChartWidget creates and configures the time chart widget
+func createChartWidget(cfg config.Config) *widgets.BatteryChart {
+	return widgets.CreateBatteryChart(
+		widgets.YRange(0, 100),
+		widgets.YLabel("%"),
+		widgets.Title("Battery % Over Time"),
+		widgets.DayHours(cfg.DayStartHour, cfg.DayEndHour),
+		widgets.DayNightColors(
+			cell.ColorNumber(cfg.DayColorNumber),   // Day color from config
+			cell.ColorNumber(cfg.NightColorNumber), // Night color from config
+		),
 	)
 }
 
@@ -97,154 +79,102 @@ func createTextWidget() (*text.Text, error) {
 	return text.New(text.WrapAtWords())
 }
 
-// createInputWidgets creates the parameter input widgets with callbacks
-func createInputWidgets(windowStr string, alpha float64, uiParams *UIParams, updateData *func() error) (*textinput.TextInput, *textinput.TextInput, error) {
-	windowInput, err := textinput.New(
-		textinput.Label("Window (time span to show): ", cell.FgColor(cell.ColorCyan)),
-		textinput.DefaultText(windowStr),
-		textinput.MaxWidthCells(12),
-		textinput.PlaceHolder("e.g., 6h, 30m"),
-		textinput.OnSubmit(func(text string) error {
-			if d, err := time.ParseDuration(text); err == nil {
-				uiParams.SetWindow(d)
-				// Auto-refresh data with new window setting
-				if *updateData != nil {
-					if err := (*updateData)(); err != nil {
-						log.Printf("Auto-refresh after window change error: %v", err)
-					}
-				}
-			}
-			return nil
-		}),
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating window input: %v", err)
-	}
-
-	alphaInput, err := textinput.New(
-		textinput.Label("Alpha (decay rate/min): ", cell.FgColor(cell.ColorCyan)),
-		textinput.DefaultText(fmt.Sprintf("%.3f", alpha)),
-		textinput.MaxWidthCells(8),
-		textinput.PlaceHolder("0.001-1.0"),
-		textinput.OnSubmit(func(text string) error {
-			if a, err := strconv.ParseFloat(text, 64); err == nil && a > 0 && a <= 1 {
-				uiParams.SetAlpha(a)
-				// Auto-refresh data with new alpha setting
-				if *updateData != nil {
-					if err := (*updateData)(); err != nil {
-						log.Printf("Auto-refresh after alpha change error: %v", err)
-					}
-				}
-			}
-			return nil
-		}),
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating alpha input: %v", err)
-	}
-
-	return windowInput, alphaInput, nil
-}
-
 // createUILayout creates the TUI container layout with all widgets
-func createUILayout(t terminalapi.Terminal, chartWidget *linechart.LineChart, textWidget *text.Text, windowInput, alphaInput *textinput.TextInput) (*container.Container, error) {
+func createUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, textWidget *text.Text) (*container.Container, error) {
 	return container.New(
 		t,
 		container.Border(linestyle.Light),
-		container.BorderTitle("Battery Logger TUI - Tab/Shift+Tab: focus, Enter: apply changes, q: quit, r: refresh"),
+		container.BorderTitle("Battery Logger TUI - Tab/Shift+Tab: focus, q: quit, r: refresh"),
 		container.KeyFocusNext(keyboard.KeyTab),
 		container.KeyFocusPrevious(keyboard.KeyBacktab),
 		container.SplitHorizontal(
 			container.Top(
+				container.ID("chart-container"),
 				container.Border(linestyle.Light),
-				container.BorderTitle("Battery % Over Time - Mouse up/down to zoom"),
+				container.BorderTitle("Battery % Over Time - i/o/mouse wheel: zoom, ←→: pan, esc: reset"),
 				container.PlaceWidget(chartWidget),
 			),
 			container.Bottom(
-				container.SplitHorizontal(
-					container.Top(
-						container.Border(linestyle.Light),
-						container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
-						container.PlaceWidget(textWidget),
-					),
-					container.Bottom(
-						container.Border(linestyle.Light),
-						container.BorderTitle("Settings - Press Enter to apply"),
-						container.SplitVertical(
-							container.Left(
-								container.PlaceWidget(windowInput),
-							),
-							container.Right(
-								container.PlaceWidget(alphaInput),
-							),
-							container.SplitPercent(50),
-						),
-					),
-					container.SplitFixedFromEnd(4),
-				),
+				container.Border(linestyle.Light),
+				container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
+				container.PlaceWidget(textWidget),
 			),
-			container.SplitPercent(60),
+			container.SplitPercent(70),
 		),
 	)
 }
 
-// processChartData handles all the data processing for chart display
-func processChartData(rows []analytics.Row, window time.Duration) ([]float64, []float64, map[int]string, bool, bool, error) {
+// processChartData converts battery data to BatteryChart format - much simpler!
+func processChartData(rows []analytics.Row) ([]widgets.TimeSeries, error) {
 	if len(rows) == 0 {
-		return nil, nil, nil, false, false, fmt.Errorf("no data available")
+		return nil, fmt.Errorf("no data available")
 	}
 
-	// Create time-based bins (1-minute bins for finest granularity)
-	binSize := 1 * time.Minute
-	bins := binDataToTimeGrid(rows, binSize, window)
-	dataStartTime := rows[0].T
-	acSeries, battSeries, labels := createTimeBasedSeries(bins, dataStartTime)
+	var series []widgets.TimeSeries
 
-	// Check for data presence and prepare values
-	var hasAC, hasBatt bool
-	acValues := make([]float64, len(acSeries))
-	battValues := make([]float64, len(battSeries))
+	// Create charging series (AC plugged in)
+	var chargingPoints []widgets.TimePoint
+	var dischargingPoints []widgets.TimePoint
 
-	for i := range acSeries {
-		if !math.IsNaN(acSeries[i]) {
-			hasAC = true
+	for _, row := range rows {
+		point := widgets.TimePoint{
+			Time:  row.T,
+			Value: row.Batt,
+			State: row.AC,
 		}
-		if !math.IsNaN(battSeries[i]) {
-			hasBatt = true
+
+		if row.AC {
+			chargingPoints = append(chargingPoints, point)
+		} else {
+			dischargingPoints = append(dischargingPoints, point)
 		}
-		acValues[i] = acSeries[i]
-		battValues[i] = battSeries[i]
 	}
 
-	return acValues, battValues, labels, hasAC, hasBatt, nil
+	// Add series with data
+	if len(chargingPoints) > 0 {
+		series = append(series, widgets.TimeSeries{
+			Name:   "Charging",
+			Points: chargingPoints,
+			Color:  cell.ColorNumber(46), // Bright green for better contrast
+		})
+	}
+
+	if len(dischargingPoints) > 0 {
+		series = append(series, widgets.TimeSeries{
+			Name:   "Discharging",
+			Points: dischargingPoints,
+			Color:  cell.ColorNumber(196), // Bright red for better contrast
+		})
+	}
+
+	return series, nil
 }
 
-// updateChartWidget updates the chart widget with new data
-func updateChartWidget(chartWidget *linechart.LineChart, acValues, battValues []float64, labels map[int]string, hasAC, hasBatt bool) error {
-	// Clear previous chart data
-	chartWidget.Series("charging", nil)
-	chartWidget.Series("discharging", nil)
-
-	// Add series to chart with time-based labels
-	if hasAC {
-		if err := chartWidget.Series("charging", acValues,
-			linechart.SeriesCellOpts(cell.FgColor(cell.ColorGreen), cell.BgColor(cell.ColorDefault)),
-			linechart.SeriesXLabels(labels),
-		); err != nil {
-			return fmt.Errorf("setting AC series: %v", err)
-		}
-	}
-
-	if hasBatt {
-		if err := chartWidget.Series("discharging", battValues,
-			linechart.SeriesCellOpts(cell.FgColor(cell.ColorRed), cell.BgColor(cell.ColorDefault)),
-			linechart.SeriesXLabels(labels),
-		); err != nil {
-			return fmt.Errorf("setting battery series: %v", err)
-		}
-	}
-
+// updateChartWidget updates the chart widget with new data - much simpler!
+func updateChartWidget(chartWidget *widgets.BatteryChart, series []widgets.TimeSeries) error {
+	// Clear and set new data - no window setting needed
+	chartWidget.ClearSeries()
+	chartWidget.SetSeries(series)
 	return nil
+}
+
+// updateChartTitleFromZoom updates the chart title with the current zoom duration
+func updateChartTitleFromZoom(c *container.Container, startTime, endTime time.Time) {
+	timeDiff := endTime.Sub(startTime)
+	var span string
+
+	if timeDiff < time.Minute {
+		span = fmt.Sprintf("%.0fs", timeDiff.Seconds())
+	} else if timeDiff < time.Hour {
+		span = fmt.Sprintf("%.1fm", timeDiff.Minutes())
+	} else if timeDiff < 24*time.Hour {
+		span = fmt.Sprintf("%.1fh", timeDiff.Hours())
+	} else {
+		span = fmt.Sprintf("%.1fd", timeDiff.Hours()/24)
+	}
+
+	title := fmt.Sprintf("Battery %% Over Time [%s] - i/o/mouse wheel: zoom, ←→: pan, esc: reset", span)
+	c.Update("chart-container", container.BorderTitle(title))
 }
 
 // generateStatusInfo processes battery data to create status information
@@ -339,9 +269,6 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 		configStr = fmt.Sprintf("📋 Config files: %s (+ %d more)", existingConfigPaths[len(existingConfigPaths)-1], len(existingConfigPaths)-1)
 	}
 
-	// Get current UI parameters for display
-	currentWindow, _, _ := uiParams.Get()
-
 	// Get battery cycle count
 	cycleCount, hasCycleCount := sysfs.BatteryCycleCount()
 
@@ -360,7 +287,6 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 		StartTime:        startTime,
 		EndTime:          endTime,
 		ConfigStr:        configStr,
-		CurrentWindow:    currentWindow,
 		LogPath:          logPath,
 		MaxChargePercent: cfg.MaxChargePercent,
 		CycleCount:       cycleCount,
@@ -409,7 +335,7 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 		fmt.Sprintf("📈 %s: %s %s", info.RateLabel, info.SlopeStr, info.Confidence),
 		timeDisplayText,
 		"",
-		fmt.Sprintf("📊 Data Summary (window: %s):", info.CurrentWindow),
+		"📊 Data Summary:",
 		fmt.Sprintf("   Total samples: %d (spanning %s)", info.TotalSamples, info.TimeRange.Round(time.Minute).String()),
 		fmt.Sprintf("   AC plugged: %d samples", info.ACSamples),
 		fmt.Sprintf("   On battery: %d samples", info.BattSamples),
@@ -438,10 +364,8 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 }
 
 // setupDataRefresh sets up periodic data refresh and returns the update function
-func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *linechart.LineChart, textWidget *text.Text, cfg config.Config) (func() error, error) {
+func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.BatteryChart, textWidget *text.Text, cfg config.Config, c *container.Container, alpha float64) (func() error, error) {
 	updateData := func() error {
-		window, alpha, _ := uiParams.Get()
-
 		rows, err := readCSV(logPath)
 		if err != nil || len(rows) == 0 {
 			textWidget.Write(fmt.Sprintf("Could not read data from %s: %v\n", logPath, err), text.WriteCellOpts(cell.FgColor(cell.ColorRed)))
@@ -449,23 +373,26 @@ func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, c
 			return nil
 		}
 
-		rows = analytics.FilterWindow(rows, window)
 		if len(rows) == 0 {
-			textWidget.Write("No recent data in window.\n", text.WriteCellOpts(cell.FgColor(cell.ColorYellow)))
+			textWidget.Write("No data available.\n", text.WriteCellOpts(cell.FgColor(cell.ColorYellow)))
 			textWidget.Write("Press q to quit, r to refresh\n")
 			return nil
 		}
 
-		// Process chart data
-		acValues, battValues, labels, hasAC, hasBatt, err := processChartData(rows, window)
+		// Process chart data - no filtering, keep all data points
+		series, err := processChartData(rows)
 		if err != nil {
 			return fmt.Errorf("processing chart data: %v", err)
 		}
 
-		// Update chart
-		if err := updateChartWidget(chartWidget, acValues, battValues, labels, hasAC, hasBatt); err != nil {
+		// Update chart - no window parameter needed
+		if err := updateChartWidget(chartWidget, series); err != nil {
 			return fmt.Errorf("updating chart: %v", err)
 		}
+
+		// Update chart title with current zoom window (not full data range)
+		startTime, endTime, _ := chartWidget.GetCurrentWindow()
+		updateChartTitleFromZoom(c, startTime, endTime)
 
 		// Generate and update status text
 		statusInfo := generateStatusInfo(rows, alpha, uiParams, logPath, cfg)
@@ -475,7 +402,7 @@ func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, c
 	}
 
 	// Set up periodic refresh
-	_, _, currentRefresh := uiParams.Get()
+	currentRefresh := uiParams.Get()
 	refreshTicker := time.NewTicker(currentRefresh)
 
 	go func() {
@@ -511,26 +438,17 @@ func createKeyboardHandler(cancel context.CancelFunc, updateData func() error) f
 
 // runTUI implements the TUI command using termdash with real-time parameter controls
 func runTUI() {
-	var windowStr string
 	var alpha float64
 
 	fs := flag.NewFlagSet("tui", flag.ExitOnError)
-	fs.StringVar(&windowStr, "window", "10h", "rolling window to display & regress (e.g., 10m, 30m, 2h)")
 	fs.Float64Var(&alpha, "alpha", 0.05, "exponential decay per minute for weights (e.g., 0.05)")
 
 	if len(os.Args) > 2 {
 		fs.Parse(os.Args[2:])
 	}
 
-	window, err := time.ParseDuration(windowStr)
-	if err != nil {
-		log.Fatalf("bad -window: %v", err)
-	}
-
 	// Initialize UI parameters with defaults - refresh is fixed at 10s
 	uiParams := &UIParams{
-		Window:  window,
-		Alpha:   alpha,
 		Refresh: 10 * time.Second, // Fixed refresh rate
 	}
 
@@ -545,10 +463,7 @@ func runTUI() {
 	defer t.Close()
 
 	// Create widgets
-	chartWidget, err := createChartWidget()
-	if err != nil {
-		log.Fatalf("createChartWidget => %v", err)
-	}
+	chartWidget := createChartWidget(cfg)
 
 	textWidget, err := createTextWidget()
 	if err != nil {
@@ -558,23 +473,22 @@ func runTUI() {
 	// Data update function (declared here so it can be used in callbacks)
 	var updateData func() error
 
-	// Create parameter control widgets with auto-refresh callbacks
-	windowInput, alphaInput, err := createInputWidgets(windowStr, alpha, uiParams, &updateData)
-	if err != nil {
-		log.Fatalf("createInputWidgets => %v", err)
-	}
-
-	// Set up the container with layout including controls
-	c, err := createUILayout(t, chartWidget, textWidget, windowInput, alphaInput)
+	// Set up the container with layout
+	c, err := createUILayout(t, chartWidget, textWidget)
 	if err != nil {
 		log.Fatalf("createUILayout => %v", err)
 	}
+
+	// Set up zoom change callback to update chart title dynamically
+	chartWidget.SetOnZoomChange(func(startTime, endTime time.Time, duration time.Duration) {
+		updateChartTitleFromZoom(c, startTime, endTime)
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Set up data refresh and get the update function
-	updateData, err = setupDataRefresh(ctx, logPath, uiParams, chartWidget, textWidget, cfg)
+	updateData, err = setupDataRefresh(ctx, logPath, uiParams, chartWidget, textWidget, cfg, c, alpha)
 	if err != nil {
 		log.Fatalf("setupDataRefresh => %v", err)
 	}
@@ -588,7 +502,7 @@ func runTUI() {
 	keyboardHandler := createKeyboardHandler(cancel, updateData)
 
 	// Run the dashboard
-	_, _, currentRefresh := uiParams.Get()
+	currentRefresh := uiParams.Get()
 	if err := termdash.Run(ctx, t, c, termdash.KeyboardSubscriber(keyboardHandler), termdash.RedrawInterval(currentRefresh)); err != nil {
 		log.Fatalf("termdash.Run => %v", err)
 	}

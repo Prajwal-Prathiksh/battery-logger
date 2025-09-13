@@ -19,6 +19,10 @@ type Config struct {
 	MaxLines         int    `toml:"max_lines"`
 	TrimBuffer       int    `toml:"trim_buffer"`
 	MaxChargePercent int    `toml:"max_charge_percent"`
+	DayColorNumber   int    `toml:"day_color_number"`
+	NightColorNumber int    `toml:"night_color_number"`
+	DayStartHour     int    `toml:"day_start_hour"`
+	DayEndHour       int    `toml:"day_end_hour"`
 }
 
 func Defaults() Config {
@@ -31,6 +35,10 @@ func Defaults() Config {
 		MaxLines:         1000,
 		TrimBuffer:       100,
 		MaxChargePercent: 100,
+		DayColorNumber:   237, // Dark gray for day
+		NightColorNumber: 0,   // True black for night
+		DayStartHour:     7,   // 7 AM
+		DayEndHour:       19,  // 7 PM
 	}
 }
 
@@ -119,6 +127,11 @@ func loadConfigFile(path string, cfg *Config) error {
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
+		// Strip comments after value (TOML style)
+		if idx := strings.IndexAny(value, "#"); idx != -1 {
+			value = strings.TrimSpace(value[:idx])
+		}
+
 		// Remove quotes from string values
 		if strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
 			value = strings.Trim(value, `"`)
@@ -151,6 +164,22 @@ func loadConfigFile(path string, cfg *Config) error {
 		case "max_charge_percent":
 			if val, err := strconv.Atoi(value); err == nil {
 				cfg.MaxChargePercent = val
+			}
+		case "day_color_number":
+			if val, err := strconv.Atoi(value); err == nil {
+				cfg.DayColorNumber = val
+			}
+		case "night_color_number":
+			if val, err := strconv.Atoi(value); err == nil {
+				cfg.NightColorNumber = val
+			}
+		case "day_start_hour":
+			if val, err := strconv.Atoi(value); err == nil {
+				cfg.DayStartHour = val
+			}
+		case "day_end_hour":
+			if val, err := strconv.Atoi(value); err == nil {
+				cfg.DayEndHour = val
 			}
 		}
 	}
