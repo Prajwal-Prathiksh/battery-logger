@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/config"
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/sysfs"
+	"github.com/Prajwal-Prathiksh/battery-logger/internal/widgets"
 
 	"github.com/mum4k/termdash"
 	"github.com/mum4k/termdash/cell"
@@ -23,7 +23,6 @@ import (
 	"github.com/mum4k/termdash/linestyle"
 	"github.com/mum4k/termdash/terminal/tcell"
 	"github.com/mum4k/termdash/terminal/terminalapi"
-	"github.com/mum4k/termdash/widgets/linechart"
 	"github.com/mum4k/termdash/widgets/text"
 	"github.com/mum4k/termdash/widgets/textinput"
 )
@@ -80,15 +79,17 @@ type StatusInfo struct {
 	HasCycleCount    bool
 }
 
-// createChartWidget creates and configures the line chart widget
-func createChartWidget() (*linechart.LineChart, error) {
-	return linechart.New(
-		linechart.AxesCellOpts(cell.FgColor(cell.ColorWhite)),
-		linechart.YLabelCellOpts(cell.FgColor(cell.ColorCyan)),
-		linechart.XLabelCellOpts(cell.FgColor(cell.ColorCyan)),
-		linechart.YAxisCustomScale(0, 100),
-		linechart.YAxisFormattedValues(linechart.ValueFormatterRoundWithSuffix("%")),
-		linechart.ZoomStepPercent(5),
+// createChartWidget creates and configures the time chart widget
+func createChartWidget() *widgets.TimeChart {
+	return widgets.NewTimeChart(
+		widgets.YRange(0, 100),
+		widgets.YLabel("%"),
+		widgets.Title("Battery % Over Time"),
+		widgets.DayHours(6, 18), // 6 AM to 6 PM is day
+		widgets.DayNightColors(
+			cell.ColorNumber(248), // Very light gray for day (subtle)
+			cell.ColorNumber(240), // Slightly darker gray for night
+		),
 	)
 }
 
@@ -147,7 +148,7 @@ func createInputWidgets(windowStr string, alpha float64, uiParams *UIParams, upd
 }
 
 // createUILayout creates the TUI container layout with all widgets
-func createUILayout(t terminalapi.Terminal, chartWidget *linechart.LineChart, textWidget *text.Text, windowInput, alphaInput *textinput.TextInput) (*container.Container, error) {
+func createUILayout(t terminalapi.Terminal, chartWidget *widgets.TimeChart, textWidget *text.Text, windowInput, alphaInput *textinput.TextInput) (*container.Container, error) {
 	return container.New(
 		t,
 		container.Border(linestyle.Light),
@@ -188,62 +189,58 @@ func createUILayout(t terminalapi.Terminal, chartWidget *linechart.LineChart, te
 	)
 }
 
-// processChartData handles all the data processing for chart display
-func processChartData(rows []analytics.Row, window time.Duration) ([]float64, []float64, map[int]string, bool, bool, error) {
+// processChartData converts battery data to TimeChart format - much simpler!
+func processChartData(rows []analytics.Row, window time.Duration) ([]widgets.TimeSeries, error) {
 	if len(rows) == 0 {
-		return nil, nil, nil, false, false, fmt.Errorf("no data available")
+		return nil, fmt.Errorf("no data available")
 	}
 
-	// Create time-based bins (1-minute bins for finest granularity)
-	binSize := 1 * time.Minute
-	bins := binDataToTimeGrid(rows, binSize, window)
-	dataStartTime := rows[0].T
-	acSeries, battSeries, labels := createTimeBasedSeries(bins, dataStartTime)
+	var series []widgets.TimeSeries
 
-	// Check for data presence and prepare values
-	var hasAC, hasBatt bool
-	acValues := make([]float64, len(acSeries))
-	battValues := make([]float64, len(battSeries))
+	// Create charging series (AC plugged in)
+	var chargingPoints []widgets.TimePoint
+	var dischargingPoints []widgets.TimePoint
 
-	for i := range acSeries {
-		if !math.IsNaN(acSeries[i]) {
-			hasAC = true
+	for _, row := range rows {
+		point := widgets.TimePoint{
+			Time:  row.T,
+			Value: row.Batt,
+			State: row.AC,
 		}
-		if !math.IsNaN(battSeries[i]) {
-			hasBatt = true
+
+		if row.AC {
+			chargingPoints = append(chargingPoints, point)
+		} else {
+			dischargingPoints = append(dischargingPoints, point)
 		}
-		acValues[i] = acSeries[i]
-		battValues[i] = battSeries[i]
 	}
 
-	return acValues, battValues, labels, hasAC, hasBatt, nil
+	// Add series with data
+	if len(chargingPoints) > 0 {
+		series = append(series, widgets.TimeSeries{
+			Name:   "Charging",
+			Points: chargingPoints,
+			Color:  cell.ColorNumber(46), // Bright green for better contrast
+		})
+	}
+
+	if len(dischargingPoints) > 0 {
+		series = append(series, widgets.TimeSeries{
+			Name:   "Discharging",
+			Points: dischargingPoints,
+			Color:  cell.ColorNumber(196), // Bright red for better contrast
+		})
+	}
+
+	return series, nil
 }
 
-// updateChartWidget updates the chart widget with new data
-func updateChartWidget(chartWidget *linechart.LineChart, acValues, battValues []float64, labels map[int]string, hasAC, hasBatt bool) error {
-	// Clear previous chart data
-	chartWidget.Series("charging", nil)
-	chartWidget.Series("discharging", nil)
-
-	// Add series to chart with time-based labels
-	if hasAC {
-		if err := chartWidget.Series("charging", acValues,
-			linechart.SeriesCellOpts(cell.FgColor(cell.ColorGreen), cell.BgColor(cell.ColorDefault)),
-			linechart.SeriesXLabels(labels),
-		); err != nil {
-			return fmt.Errorf("setting AC series: %v", err)
-		}
-	}
-
-	if hasBatt {
-		if err := chartWidget.Series("discharging", battValues,
-			linechart.SeriesCellOpts(cell.FgColor(cell.ColorRed), cell.BgColor(cell.ColorDefault)),
-			linechart.SeriesXLabels(labels),
-		); err != nil {
-			return fmt.Errorf("setting battery series: %v", err)
-		}
-	}
-
+// updateChartWidget updates the chart widget with new data - much simpler!
+func updateChartWidget(chartWidget *widgets.TimeChart, series []widgets.TimeSeries, window time.Duration) error {
+	// Clear and set new data
+	chartWidget.ClearSeries()
+	chartWidget.SetWindow(window)
+	chartWidget.SetSeries(series)
 	return nil
 }
 
@@ -438,7 +435,7 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 }
 
 // setupDataRefresh sets up periodic data refresh and returns the update function
-func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *linechart.LineChart, textWidget *text.Text, cfg config.Config) (func() error, error) {
+func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.TimeChart, textWidget *text.Text, cfg config.Config) (func() error, error) {
 	updateData := func() error {
 		window, alpha, _ := uiParams.Get()
 
@@ -457,13 +454,13 @@ func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, c
 		}
 
 		// Process chart data
-		acValues, battValues, labels, hasAC, hasBatt, err := processChartData(rows, window)
+		series, err := processChartData(rows, window)
 		if err != nil {
 			return fmt.Errorf("processing chart data: %v", err)
 		}
 
 		// Update chart
-		if err := updateChartWidget(chartWidget, acValues, battValues, labels, hasAC, hasBatt); err != nil {
+		if err := updateChartWidget(chartWidget, series, window); err != nil {
 			return fmt.Errorf("updating chart: %v", err)
 		}
 
@@ -545,10 +542,7 @@ func runTUI() {
 	defer t.Close()
 
 	// Create widgets
-	chartWidget, err := createChartWidget()
-	if err != nil {
-		log.Fatalf("createChartWidget => %v", err)
-	}
+	chartWidget := createChartWidget()
 
 	textWidget, err := createTextWidget()
 	if err != nil {
