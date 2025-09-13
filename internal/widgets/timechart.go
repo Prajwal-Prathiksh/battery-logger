@@ -64,6 +64,9 @@ type BatteryChart struct {
 	zoomStep  float64       // zoom step percentage (0.1 = 10%)
 	minWindow time.Duration // minimum zoom window (5m)
 	maxWindow time.Duration // maximum zoom window (7d)
+
+	// Callback for when zoom/pan changes
+	onZoomChange func(startTime time.Time, endTime time.Time, duration time.Duration)
 }
 
 // BatteryChartOption is used to configure the BatteryChart
@@ -183,6 +186,23 @@ func (tc *BatteryChart) SetWindow(window time.Duration) {
 	now := time.Now()
 	tc.windowEnd = now
 	tc.windowStart = now.Add(-window)
+}
+
+// SetOnZoomChange sets a callback that is called whenever the zoom or pan changes
+func (tc *BatteryChart) SetOnZoomChange(callback func(startTime time.Time, endTime time.Time, duration time.Duration)) {
+	tc.onZoomChange = callback
+}
+
+// triggerZoomChange calls the zoom change callback if it's set
+func (tc *BatteryChart) triggerZoomChange() {
+	if tc.onZoomChange != nil {
+		tc.onZoomChange(tc.windowStart, tc.windowEnd, tc.currentWindow)
+	}
+}
+
+// GetCurrentWindow returns the current zoom window information
+func (tc *BatteryChart) GetCurrentWindow() (startTime time.Time, endTime time.Time, duration time.Duration) {
+	return tc.windowStart, tc.windowEnd, tc.currentWindow
 }
 
 // Draw implements widgetapi.Widget.Draw
@@ -635,6 +655,9 @@ func (tc *BatteryChart) zoom(zoomIn bool, position image.Point) error {
 
 	// Update window times (keep end time, adjust start time)
 	tc.windowStart = tc.windowEnd.Add(-tc.currentWindow)
+
+	// Trigger callback to update title
+	tc.triggerZoomChange()
 	return nil
 }
 
@@ -664,5 +687,7 @@ func (tc *BatteryChart) pan(right bool) error {
 		tc.windowEnd = tc.windowEnd.Add(-panDistance)
 	}
 
+	// Trigger callback to update title
+	tc.triggerZoomChange()
 	return nil
 }

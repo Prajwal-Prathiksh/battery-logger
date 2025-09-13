@@ -126,6 +126,7 @@ func createUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, t
 		container.KeyFocusPrevious(keyboard.KeyBacktab),
 		container.SplitHorizontal(
 			container.Top(
+				container.ID("chart-container"),
 				container.Border(linestyle.Light),
 				container.BorderTitle("Battery % Over Time - Mouse up/down to zoom"),
 				container.PlaceWidget(chartWidget),
@@ -202,6 +203,71 @@ func updateChartWidget(chartWidget *widgets.BatteryChart, series []widgets.TimeS
 	chartWidget.ClearSeries()
 	chartWidget.SetSeries(series)
 	return nil
+}
+
+// updateChartTitle updates the chart container's border title with current time span
+func updateChartTitle(c *container.Container, rows []analytics.Row) error {
+	if len(rows) < 2 {
+		return c.Update("chart-container", container.BorderTitle("Battery % Over Time - Mouse up/down to zoom"))
+	}
+
+	// Calculate time span from first to last data point
+	timeSpan := rows[len(rows)-1].T.Sub(rows[0].T)
+
+	// Format time span in a readable way
+	var spanStr string
+	if timeSpan < time.Hour {
+		spanStr = fmt.Sprintf("%.0fm", timeSpan.Minutes())
+	} else if timeSpan < 24*time.Hour {
+		hours := int(timeSpan.Hours())
+		minutes := int(timeSpan.Minutes()) % 60
+		if minutes == 0 {
+			spanStr = fmt.Sprintf("%dh", hours)
+		} else {
+			spanStr = fmt.Sprintf("%dh %dm", hours, minutes)
+		}
+	} else {
+		days := int(timeSpan.Hours() / 24)
+		hours := int(timeSpan.Hours()) % 24
+		if hours == 0 {
+			spanStr = fmt.Sprintf("%dd", days)
+		} else {
+			spanStr = fmt.Sprintf("%dd %dh", days, hours)
+		}
+	}
+
+	title := fmt.Sprintf("Battery %% Over Time - Mouse up/down to zoom (%s)", spanStr)
+	return c.Update("chart-container", container.BorderTitle(title))
+}
+
+// updateChartTitleFromZoom updates the chart title with the current zoom duration
+func updateChartTitleFromZoom(c *container.Container, duration time.Duration) {
+	// Format time span in a readable way
+	var spanStr string
+	if duration < time.Hour {
+		spanStr = fmt.Sprintf("%.0fm", duration.Minutes())
+	} else if duration < 24*time.Hour {
+		hours := int(duration.Hours())
+		minutes := int(duration.Minutes()) % 60
+		if minutes == 0 {
+			spanStr = fmt.Sprintf("%dh", hours)
+		} else {
+			spanStr = fmt.Sprintf("%dh %dm", hours, minutes)
+		}
+	} else {
+		days := int(duration.Hours() / 24)
+		hours := int(duration.Hours()) % 24
+		if hours == 0 {
+			spanStr = fmt.Sprintf("%dd", days)
+		} else {
+			spanStr = fmt.Sprintf("%dd %dh", days, hours)
+		}
+	}
+
+	title := fmt.Sprintf("Battery %% Over Time - Mouse up/down to zoom (%s)", spanStr)
+	if err := c.Update("chart-container", container.BorderTitle(title)); err != nil {
+		log.Printf("Failed to update chart title from zoom: %v", err)
+	}
 }
 
 // generateStatusInfo processes battery data to create status information
@@ -391,7 +457,7 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 }
 
 // setupDataRefresh sets up periodic data refresh and returns the update function
-func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.BatteryChart, textWidget *text.Text, cfg config.Config) (func() error, error) {
+func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.BatteryChart, textWidget *text.Text, cfg config.Config, c *container.Container) (func() error, error) {
 	updateData := func() error {
 		alpha, _ := uiParams.Get()
 
@@ -418,6 +484,10 @@ func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, c
 		if err := updateChartWidget(chartWidget, series); err != nil {
 			return fmt.Errorf("updating chart: %v", err)
 		}
+
+		// Update chart title with current zoom window (not full data range)
+		_, _, duration := chartWidget.GetCurrentWindow()
+		updateChartTitleFromZoom(c, duration)
 
 		// Generate and update status text
 		statusInfo := generateStatusInfo(rows, alpha, uiParams, logPath, cfg)
@@ -511,11 +581,16 @@ func runTUI() {
 		log.Fatalf("createUILayout => %v", err)
 	}
 
+	// Set up zoom change callback to update chart title dynamically
+	chartWidget.SetOnZoomChange(func(startTime, endTime time.Time, duration time.Duration) {
+		updateChartTitleFromZoom(c, duration)
+	})
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Set up data refresh and get the update function
-	updateData, err = setupDataRefresh(ctx, logPath, uiParams, chartWidget, textWidget, cfg)
+	updateData, err = setupDataRefresh(ctx, logPath, uiParams, chartWidget, textWidget, cfg, c)
 	if err != nil {
 		log.Fatalf("setupDataRefresh => %v", err)
 	}
