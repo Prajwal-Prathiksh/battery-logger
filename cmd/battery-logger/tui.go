@@ -117,15 +117,13 @@ func createUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, t
 	)
 }
 
-// processChartData converts battery data to BatteryChart format - much simpler!
+// processChartData converts battery data to BatteryChart format
 func processChartData(rows []analytics.Row) ([]widgets.TimeSeries, error) {
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("no data available")
 	}
 
 	var series []widgets.TimeSeries
-
-	// Create charging series (AC plugged in)
 	var chargingPoints []widgets.TimePoint
 	var dischargingPoints []widgets.TimePoint
 
@@ -135,7 +133,6 @@ func processChartData(rows []analytics.Row) ([]widgets.TimeSeries, error) {
 			Value: row.Batt,
 			State: row.AC,
 		}
-
 		if row.AC {
 			chargingPoints = append(chargingPoints, point)
 		} else {
@@ -143,7 +140,6 @@ func processChartData(rows []analytics.Row) ([]widgets.TimeSeries, error) {
 		}
 	}
 
-	// Add series with data
 	if len(chargingPoints) > 0 {
 		series = append(series, widgets.TimeSeries{
 			Name:   "Charging",
@@ -151,7 +147,6 @@ func processChartData(rows []analytics.Row) ([]widgets.TimeSeries, error) {
 			Color:  cell.ColorNumber(46), // Bright green for better contrast
 		})
 	}
-
 	if len(dischargingPoints) > 0 {
 		series = append(series, widgets.TimeSeries{
 			Name:   "Discharging",
@@ -159,13 +154,11 @@ func processChartData(rows []analytics.Row) ([]widgets.TimeSeries, error) {
 			Color:  cell.ColorNumber(196), // Bright red for better contrast
 		})
 	}
-
 	return series, nil
 }
 
-// updateChartWidget updates the chart widget with new data - much simpler!
+// updateChartWidget updates the chart widget with new data
 func updateChartWidget(chartWidget *widgets.BatteryChart, series []widgets.TimeSeries) error {
-	// Clear and set new data - no window setting needed
 	chartWidget.ClearSeries()
 	chartWidget.SetSeries(series)
 	return nil
@@ -179,7 +172,7 @@ func updateChartTitleFromZoom(c *container.Container, startTime, endTime time.Ti
 	c.Update("chart-container", container.BorderTitle(title))
 }
 
-// generateStatusInfo processes battery data to create status information
+// generateStatusInfo processes battery data to create status information (logic only)
 func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams, logPath string, cfg config.Config) StatusInfo {
 	latest := rows[len(rows)-1]
 
@@ -197,31 +190,16 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 
 	if len(contiguousSamples) >= 2 {
 		rate, estimateMins, conf, ok := analytics.CalculateRateAndEstimate(contiguousSamples, latest.Batt, alpha, cfg.MaxChargePercent)
-
+		confidence = conf
 		if ok {
 			if currentACState {
-				// Charging mode
 				rateLabel = "Charge Rate"
-				if rate > 1e-6 {
-					// Format estimate automatically: <24h as HH:mm, >=24h as Days Hours
-					dur := time.Duration(estimateMins * float64(time.Minute)).Round(time.Minute)
-					est = formatDurationAuto(dur)
-				} else {
-					est = "∞ (not charging or already full)"
-				}
 			} else {
-				// Discharging mode
 				rateLabel = "Discharge Rate"
-				if rate < -1e-6 {
-					// Format estimate automatically: <24h as HH:mm, >=24h as Days Hours
-					dur := time.Duration(estimateMins * float64(time.Minute)).Round(time.Minute)
-					est = formatDurationAuto(dur)
-				} else {
-					est = "∞ (not discharging)"
-				}
 			}
+			dur := time.Duration(estimateMins * float64(time.Minute)).Round(time.Minute)
+			est = formatDurationAuto(dur)
 			slopeStr = fmt.Sprintf("%.3f %%/min", rate)
-			confidence = conf
 		} else {
 			if currentACState {
 				rateLabel = "Charge Rate"
@@ -230,7 +208,6 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 			}
 			est = "—"
 			slopeStr = "n/a"
-			confidence = conf
 		}
 	} else {
 		if currentACState {
@@ -300,84 +277,95 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 	}
 }
 
-// updateStatusText writes formatted status information to the text widget
-func updateStatusText(textWidget *text.Text, info StatusInfo) {
-	textWidget.Reset()
+// Formatting section for status text display
+type lineSpec struct {
+	Text     string
+	Color    cell.Color
+	UseColor bool
+}
 
-	// Latest status
+// buildStatusLines centralizes ALL string construction & styling.
+func buildStatusLines(info StatusInfo) []lineSpec {
+	var lines []lineSpec
+
+	appendLine := func(txt string, color cell.Color, useColor bool) {
+		// Use strings package meaningfully to normalize whitespace.
+		txt = strings.TrimSpace(txt)
+		lines = append(lines, lineSpec{Text: txt, Color: color, UseColor: useColor})
+	}
+
+	// Header: AC status
 	acStatus := "Unplugged"
 	acIcon := "🔋"
 	if info.Latest.AC {
 		acStatus = "Plugged In"
 		acIcon = "🔌"
 	}
+	appendLine(fmt.Sprintf("%s AC Status: %s", acIcon, acStatus), cell.ColorYellow, true)
 
-	// Determine time estimation label based on AC state
-	var timeDisplayText string
-	if info.Latest.AC {
-		timeDisplayText = fmt.Sprintf("⏱️  Time to Full (%d%%): %s", info.MaxChargePercent, info.Estimate)
-	} else {
-		timeDisplayText = fmt.Sprintf("⏱️  Time to Empty (0%%): %s", info.Estimate)
-	}
-
-	// Write status information
-	statusLines := []string{
-		fmt.Sprintf("%s AC Status: %s", acIcon, acStatus),
-	}
-
-	// Show delta in a more UI/UX friendly way
+	// Delta since last transition
 	if !info.TransitionTime.IsZero() {
 		durationSince := info.Latest.T.Sub(info.TransitionTime).Round(time.Minute)
-		battDrop := info.TransitionBatt - info.Latest.Batt
-		var deltaLine string
 		if info.Latest.AC {
-			// Plugged in: show time since plugged in and battery gained
 			battGain := info.Latest.Batt - info.TransitionBatt
-			deltaLine = fmt.Sprintf("   Plugged in for %s, battery ↑ %.1f%% (start: %.1f%%)", formatDurationAuto(durationSince), battGain, info.TransitionBatt)
+			appendLine(
+				fmt.Sprintf("   Plugged in for %s, battery ↑ %.1f%% (start: %.1f%%)",
+					formatDurationAuto(durationSince), battGain, info.TransitionBatt),
+				0, false,
+			)
 		} else {
-			// On battery: show time since unplugged and battery dropped, with since timestamp
-			deltaLine = fmt.Sprintf("   On battery for %s (since: %s), battery ↓ %.1f%% (start: %.1f%%)", formatDurationAuto(durationSince), info.TransitionTime.Format("Jan 2 15:04"), battDrop, info.TransitionBatt)
+			battDrop := info.TransitionBatt - info.Latest.Batt
+			appendLine(
+				fmt.Sprintf("   On battery for %s (since: %s), battery ↓ %.1f%% (start: %.1f%%)",
+					formatDurationAuto(durationSince), info.TransitionTime.Format("Jan 2 15:04"), battDrop, info.TransitionBatt),
+				0, false,
+			)
 		}
-		statusLines = append(statusLines, deltaLine)
 	}
 
-	statusLines = append(statusLines, fmt.Sprintf("🔋 Current Battery: %.1f%%", info.Latest.Batt))
-
-	// Add cycle count if available
+	// Current battery & cycles
+	appendLine(fmt.Sprintf("🔋 Current Battery: %.1f%%", info.Latest.Batt), 0, false)
 	if info.HasCycleCount {
-		statusLines = append(statusLines, fmt.Sprintf("🔄 Battery Cycles: %d", info.CycleCount))
+		appendLine(fmt.Sprintf("🔄 Battery Cycles: %d", info.CycleCount), 0, false)
 	}
 
-	// Continue with rest of the status lines
-	remainingLines := []string{
-		fmt.Sprintf("📈 %s: %s %s", info.RateLabel, info.SlopeStr, info.Confidence),
-		timeDisplayText,
-		"",
-		"📊 Data Summary:",
-		fmt.Sprintf("   Total samples: %d (spanning %s)", info.TotalSamples, formatDurationAuto(info.TimeRange.Round(time.Minute))),
-		fmt.Sprintf("   AC plugged: %d samples", info.ACSamples),
-		fmt.Sprintf("   On battery: %d samples", info.BattSamples),
-		fmt.Sprintf("   Time range: %s to %s", info.StartTime, info.EndTime),
-		"",
-		fmt.Sprintf("📄 Data file: %s", info.LogPath),
-		info.ConfigStr,
+	// Rate + estimate
+	appendLine(fmt.Sprintf("📈 %s: %s %s", info.RateLabel, info.SlopeStr, info.Confidence), 0, false)
+	if info.Latest.AC {
+		appendLine(fmt.Sprintf("⏱️  Time to Full (%d%%): %s", info.MaxChargePercent, info.Estimate), 0, false)
+	} else {
+		appendLine(fmt.Sprintf("⏱️  Time to Empty (0%%): %s", info.Estimate), 0, false)
 	}
 
-	statusLines = append(statusLines, remainingLines...)
+	// Spacer
+	appendLine("", 0, false)
 
-	for _, line := range statusLines {
-		var opts []text.WriteOption
-		if strings.Contains(line, "AC plugged") {
-			opts = append(opts, text.WriteCellOpts(cell.FgColor(cell.ColorGreen)))
-		} else if strings.Contains(line, "On battery") {
-			opts = append(opts, text.WriteCellOpts(cell.FgColor(cell.ColorRed)))
-		} else if strings.HasPrefix(line, "🔋") || strings.HasPrefix(line, "🔌") {
-			opts = append(opts, text.WriteCellOpts(cell.FgColor(cell.ColorYellow)))
-		} else if strings.HasPrefix(line, "⚙️") {
-			opts = append(opts, text.WriteCellOpts(cell.FgColor(cell.ColorCyan)))
+	// Summary section
+	appendLine("📊 Data Summary:", 0, false)
+	appendLine(fmt.Sprintf("   Total samples: %d (spanning %s)", info.TotalSamples, formatDurationAuto(info.TimeRange.Round(time.Minute))), 0, false)
+	appendLine(fmt.Sprintf("   AC plugged: %d samples", info.ACSamples), cell.ColorGreen, true)
+	appendLine(fmt.Sprintf("   On battery: %d samples", info.BattSamples), cell.ColorRed, true)
+	appendLine(fmt.Sprintf("   Time range: %s to %s", info.StartTime, info.EndTime), 0, false)
+
+	// Spacer
+	appendLine("", 0, false)
+
+	// Paths & config
+	appendLine(fmt.Sprintf("📄 Data file: %s", info.LogPath), 0, false)
+	appendLine(info.ConfigStr, 0, false)
+
+	return lines
+}
+
+// updateStatusText writes formatted status information to the text widget
+func updateStatusText(textWidget *text.Text, info StatusInfo) {
+	textWidget.Reset()
+	for _, ln := range buildStatusLines(info) {
+		if ln.UseColor {
+			textWidget.Write(ln.Text+"\n", text.WriteCellOpts(cell.FgColor(ln.Color)))
+		} else {
+			textWidget.Write(ln.Text + "\n")
 		}
-
-		textWidget.Write(line+"\n", opts...)
 	}
 }
 
@@ -397,13 +385,13 @@ func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, c
 			return nil
 		}
 
-		// Process chart data - no filtering, keep all data points
+		// Process chart data
 		series, err := processChartData(rows)
 		if err != nil {
 			return fmt.Errorf("processing chart data: %v", err)
 		}
 
-		// Update chart - no window parameter needed
+		// Update chart
 		if err := updateChartWidget(chartWidget, series); err != nil {
 			return fmt.Errorf("updating chart: %v", err)
 		}
