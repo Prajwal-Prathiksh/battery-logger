@@ -559,38 +559,61 @@ func tuiCmd() {
 			sinceStr = fmt.Sprintf(" (Since: %s, %.1f%%)", transitionTime.Format("15:04"), transitionBatt)
 		}
 
-		// For regression, consider only the most recent contiguous unplugged points
-		var unplugged []analytics.Row
-		for i := len(rows) - 1; i >= 0; i-- {
-			if !rows[i].AC {
-				unplugged = append([]analytics.Row{rows[i]}, unplugged...)
-			} else {
-				break
-			}
-		}
+		// For regression, consider only the most recent contiguous samples with the same AC state
+		currentACState := latest.AC
+		contiguousSamples := analytics.FilterContiguousACState(rows, currentACState)
 
 		var est string
 		var slopeStr string
 		var confidence string
+		var rateLabel string
 
-		if len(unplugged) >= 2 {
-			b, _, ok := analytics.WeightedLinReg(unplugged, alpha)
-			if ok && b < -1e-6 {
-				mins := -latest.Batt / b
-				est = analytics.FmtDur(mins)
-				confidence = fmt.Sprintf("(based on %d unplugged samples)", len(unplugged))
-			} else if ok && b >= -1e-6 {
-				est = "∞ (not discharging or charging)"
-				confidence = ""
+		if len(contiguousSamples) >= 2 {
+			rate, estimateMins, conf, ok := analytics.CalculateRateAndEstimate(contiguousSamples, latest.Batt, alpha)
+
+			if ok {
+				if currentACState {
+					// Charging mode
+					rateLabel = "Charge Rate"
+					if rate > 1e-6 {
+						est = analytics.FmtDur(estimateMins)
+					} else {
+						est = "∞ (not charging or already full)"
+					}
+				} else {
+					// Discharging mode
+					rateLabel = "Discharge Rate"
+					if rate < -1e-6 {
+						est = analytics.FmtDur(estimateMins)
+					} else {
+						est = "∞ (not discharging)"
+					}
+				}
+				slopeStr = fmt.Sprintf("%.3f %%/min", rate)
+				confidence = conf
 			} else {
+				if currentACState {
+					rateLabel = "Charge Rate"
+				} else {
+					rateLabel = "Discharge Rate"
+				}
 				est = "—"
-				confidence = "(regression failed)"
+				slopeStr = "n/a"
+				confidence = conf
 			}
-			slopeStr = fmt.Sprintf("%.3f %%/min", b)
 		} else {
+			if currentACState {
+				rateLabel = "Charge Rate"
+			} else {
+				rateLabel = "Discharge Rate"
+			}
 			est = "—"
 			slopeStr = "n/a"
-			confidence = "(need ≥2 unplugged samples)"
+			acStateStr := "charging"
+			if !currentACState {
+				acStateStr = "discharging"
+			}
+			confidence = fmt.Sprintf("(need ≥2 %s samples)", acStateStr)
 		}
 
 		// Count total samples in window
@@ -624,12 +647,20 @@ func tuiCmd() {
 		// Get current UI parameters for display
 		currentWindow, _, _ := uiParams.Get()
 
+		// Determine time estimation label based on AC state
+		var timeDisplayText string
+		if currentACState {
+			timeDisplayText = fmt.Sprintf("⏱️  Time to Full (100%%): %s", est)
+		} else {
+			timeDisplayText = fmt.Sprintf("⏱️  Time to Empty (0%%): %s", est)
+		}
+
 		// Write status information
 		statusLines := []string{
 			fmt.Sprintf("%s AC Status: %s%s", acIcon, acStatus, sinceStr),
 			fmt.Sprintf("🔋 Current Battery: %.1f%%", latest.Batt),
-			fmt.Sprintf("📈 Discharge Rate: %s %s", slopeStr, confidence),
-			fmt.Sprintf("⏱️  Time to Empty (0%%): %s", est),
+			fmt.Sprintf("📈 %s: %s %s", rateLabel, slopeStr, confidence),
+			timeDisplayText,
 			"",
 			fmt.Sprintf("📊 Data Summary (window: %s):", currentWindow),
 			fmt.Sprintf("   Total samples: %d (spanning %s)", totalSamples, timeRange.Round(time.Minute).String()),

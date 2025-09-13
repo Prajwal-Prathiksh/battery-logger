@@ -92,6 +92,71 @@ func FmtDur(mins float64) string {
 	return fmt.Sprintf("%dh %dm", h, m)
 }
 
+// FilterContiguousACState filters rows to include only the most recent contiguous
+// samples with the specified AC state (true for plugged, false for unplugged).
+// Returns rows in chronological order (oldest first).
+func FilterContiguousACState(rows []Row, acState bool) []Row {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	var filtered []Row
+	// Walk backwards from the end to find contiguous samples with the specified AC state
+	for i := len(rows) - 1; i >= 0; i-- {
+		if rows[i].AC == acState {
+			filtered = append([]Row{rows[i]}, filtered...)
+		} else {
+			break
+		}
+	}
+	return filtered
+}
+
+// CalculateRateAndEstimate calculates the battery rate and time estimate based on AC state.
+// For charging (AC=true): returns positive rate and time to 100%.
+// For discharging (AC=false): returns negative rate and time to 0%.
+// Returns rate (% per minute), estimate (minutes), confidence string, and success flag.
+func CalculateRateAndEstimate(rows []Row, currentBatt float64, alpha float64) (float64, float64, string, bool) {
+	if len(rows) < 2 {
+		return 0, 0, "(need ≥2 samples with same AC state)", false
+	}
+
+	// Determine if we're looking at charging or discharging data
+	isCharging := rows[0].AC // All rows should have the same AC state due to filtering
+
+	rate, _, ok := WeightedLinReg(rows, alpha)
+	if !ok {
+		return 0, 0, "(regression failed)", false
+	}
+
+	var estimate float64
+	var confidence string
+
+	if isCharging {
+		// When charging, rate should be positive (battery % increasing)
+		if rate > 1e-6 { // Positive rate means charging
+			estimate = (100 - currentBatt) / rate // Time to reach 100%
+			confidence = fmt.Sprintf("(based on %d charging samples)", len(rows))
+		} else {
+			// Rate is negative or zero while plugged in - not actually charging
+			estimate = math.Inf(1) // Infinite time (already at max or discharging while plugged)
+			confidence = "(not charging or already full)"
+		}
+	} else {
+		// When discharging, rate should be negative (battery % decreasing)
+		if rate < -1e-6 { // Negative rate means discharging
+			estimate = -currentBatt / rate // Time to reach 0%
+			confidence = fmt.Sprintf("(based on %d discharging samples)", len(rows))
+		} else {
+			// Rate is positive or zero while unplugged - unusual
+			estimate = math.Inf(1) // Infinite time (not actually discharging)
+			confidence = "(not discharging)"
+		}
+	}
+
+	return rate, estimate, confidence, true
+}
+
 // ParseCSVRows parses CSV data with flexible column detection and
 // converts it to a slice of Row structs. The CSV must contain
 // timestamp, AC connection status, and battery percentage columns.
@@ -114,13 +179,23 @@ func ParseCSVRows(rows [][]string) ([]Row, error) {
 
 	tsIdx := col("timestamp")
 	acIdx := col("ac_connected")
-	if acIdx == -1 { acIdx = col("ac") }
-	if acIdx == -1 { acIdx = col("ac plugged in (bool)") }
-	if acIdx == -1 { acIdx = col("ac plugged in") }
+	if acIdx == -1 {
+		acIdx = col("ac")
+	}
+	if acIdx == -1 {
+		acIdx = col("ac plugged in (bool)")
+	}
+	if acIdx == -1 {
+		acIdx = col("ac plugged in")
+	}
 	battIdx := col("battery_life")
-	if battIdx == -1 { battIdx = col("battery") }
-	if battIdx == -1 { battIdx = col("battery life (%)") }
-	
+	if battIdx == -1 {
+		battIdx = col("battery")
+	}
+	if battIdx == -1 {
+		battIdx = col("battery life (%)")
+	}
+
 	if tsIdx == -1 || acIdx == -1 || battIdx == -1 {
 		return nil, fmt.Errorf("expected headers: timestamp, ac_connected, battery_life (or similar)")
 	}
@@ -131,7 +206,7 @@ func ParseCSVRows(rows [][]string) ([]Row, error) {
 		if len(rec) <= battIdx || len(rec) <= tsIdx || len(rec) <= acIdx {
 			continue
 		}
-		
+
 		t, err := time.Parse(time.RFC3339, strings.TrimSpace(rec[tsIdx]))
 		if err != nil {
 			// Try some common fallback formats if needed
@@ -152,17 +227,17 @@ func ParseCSVRows(rows [][]string) ([]Row, error) {
 				continue
 			}
 		}
-		
+
 		ac, err := ParseBoolLoose(rec[acIdx])
 		if err != nil {
 			continue
 		}
-		
+
 		b, err := strconv.ParseFloat(strings.TrimSpace(rec[battIdx]), 64)
 		if err != nil {
 			continue
 		}
-		
+
 		out = append(out, Row{T: t, AC: ac, Batt: b})
 	}
 	return out, nil
