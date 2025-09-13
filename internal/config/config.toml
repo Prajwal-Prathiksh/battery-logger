@@ -6,3 +6,9 @@ log_file = "battery.csv"
 max_lines = 1000
 trim_buffer = 100
 max_charge_percent = 100
+
+# Day/Night visualization settings
+day_color_number = 237    # Dark gray for day (darker but still distinguishable)
+night_color_number = 0    # True black for night (pitch black)
+day_start_hour = 7        # 7 AM - when day starts
+day_end_hour = 19         # 7 PM - when night starts

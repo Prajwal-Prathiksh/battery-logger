@@ -77,6 +77,12 @@ log_file = "battery.csv"
 max_lines = 1000            # Max lines before rotation
 trim_buffer = 100           # Buffer for trimming
 max_charge_percent = 100     # Maximum charge target (useful for battery longevity)
+
+# Day/Night visualization settings
+day_color_number = 237       # Terminal color number for day background (0-255)
+night_color_number = 0       # Terminal color number for night background (0-255)  
+day_start_hour = 7           # Hour when day starts (0-23)
+day_end_hour = 19            # Hour when night starts (0-23)
 ```
 
 > [!IMPORTANT]

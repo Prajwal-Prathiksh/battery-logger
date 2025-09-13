@@ -61,15 +61,15 @@ type StatusInfo struct {
 }
 
 // createChartWidget creates and configures the time chart widget
-func createChartWidget() *widgets.BatteryChart {
+func createChartWidget(cfg config.Config) *widgets.BatteryChart {
 	return widgets.CreateBatteryChart(
 		widgets.YRange(0, 100),
 		widgets.YLabel("%"),
 		widgets.Title("Battery % Over Time"),
-		widgets.DayHours(7, 19), // 7 AM to 7 PM is day
+		widgets.DayHours(cfg.DayStartHour, cfg.DayEndHour),
 		widgets.DayNightColors(
-			cell.ColorNumber(237), // Dark gray for day (darker but still distinguishable)
-			cell.ColorNumber(0),   // True black for night (pitch black)
+			cell.ColorNumber(cfg.DayColorNumber),   // Day color from config
+			cell.ColorNumber(cfg.NightColorNumber), // Night color from config
 		),
 	)
 }
@@ -463,7 +463,7 @@ func runTUI() {
 	defer t.Close()
 
 	// Create widgets
-	chartWidget := createChartWidget()
+	chartWidget := createChartWidget(cfg)
 
 	textWidget, err := createTextWidget()
 	if err != nil {
