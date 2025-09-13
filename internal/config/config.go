@@ -127,6 +127,11 @@ func loadConfigFile(path string, cfg *Config) error {
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
+		// Strip comments after value (TOML style)
+		if idx := strings.IndexAny(value, "#"); idx != -1 {
+			value = strings.TrimSpace(value[:idx])
+		}
+
 		// Remove quotes from string values
 		if strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
 			value = strings.Trim(value, `"`)
