@@ -39,7 +39,7 @@ The TUI provides real-time visualization of battery data with intelligent discha
 battery-logger tui
 
 # Focus on recent data with custom settings
-battery-logger tui -window 30m -alpha 0.1
+battery-logger tui -alpha 0.1
 ```
 
 **Features:**
