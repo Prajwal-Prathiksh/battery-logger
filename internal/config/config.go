@@ -11,13 +11,14 @@ import (
 )
 
 type Config struct {
-	IntervalSecs       int    `toml:"interval_secs"`
-	IntervalSecsOnAC   int    `toml:"interval_secs_on_ac"`
-	Timezone           string `toml:"timezone"` // "UTC" or "Local"
-	LogDir             string `toml:"log_dir"`
-	LogFile            string `toml:"log_file"`
-	MaxLines           int    `toml:"max_lines"`
-	TrimBuffer         int    `toml:"trim_buffer"`
+	IntervalSecs     int    `toml:"interval_secs"`
+	IntervalSecsOnAC int    `toml:"interval_secs_on_ac"`
+	Timezone         string `toml:"timezone"` // "UTC" or "Local"
+	LogDir           string `toml:"log_dir"`
+	LogFile          string `toml:"log_file"`
+	MaxLines         int    `toml:"max_lines"`
+	TrimBuffer       int    `toml:"trim_buffer"`
+	MaxChargePercent int    `toml:"max_charge_percent"`
 }
 
 func Defaults() Config {
@@ -29,6 +30,7 @@ func Defaults() Config {
 		LogFile:          "battery.csv",
 		MaxLines:         1000,
 		TrimBuffer:       100,
+		MaxChargePercent: 100,
 	}
 }
 
@@ -47,10 +49,10 @@ func getConfigPathsInternal() []string {
 // GetConfigPaths returns the list of config file paths that are checked, and which ones exist
 func GetConfigPaths() ([]string, []string) {
 	relativePaths := getConfigPathsInternal()
-	
+
 	var allPaths []string
 	var existingPaths []string
-	
+
 	for _, path := range relativePaths {
 		// Resolve to absolute path
 		absPath, err := filepath.Abs(path)
@@ -59,21 +61,21 @@ func GetConfigPaths() ([]string, []string) {
 			absPath = path
 		}
 		allPaths = append(allPaths, absPath)
-		
+
 		if _, err := os.Stat(path); err == nil {
 			existingPaths = append(existingPaths, absPath)
 		}
 	}
-	
+
 	return allPaths, existingPaths
 }
 
 func Load() (Config, error) {
 	cfg := Defaults()
-	
+
 	// Get config paths from the shared function
 	configPaths := getConfigPathsInternal()
-	
+
 	// Load configs in order, later ones override earlier ones
 	for _, path := range configPaths {
 		if err := loadConfigFile(path, &cfg); err != nil {
@@ -83,7 +85,7 @@ func Load() (Config, error) {
 			}
 		}
 	}
-	
+
 	// Expand ~ in LogDir
 	if strings.HasPrefix(cfg.LogDir, "~") {
 		home, _ := os.UserHomeDir()
@@ -102,26 +104,26 @@ func loadConfigFile(path string, cfg *Config) error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "#") {
 			continue
 		}
-		
+
 		// Parse key = value pairs
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		
+
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
-		
+
 		// Remove quotes from string values
 		if strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
 			value = strings.Trim(value, `"`)
 		}
-		
+
 		// Set config values based on key
 		switch key {
 		case "interval_secs":
@@ -148,7 +150,7 @@ func loadConfigFile(path string, cfg *Config) error {
 			}
 		}
 	}
-	
+
 	return scanner.Err()
 }
 

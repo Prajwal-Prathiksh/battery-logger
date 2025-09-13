@@ -5,3 +5,4 @@ log_dir = "~/.local/state/battery-logger"
 log_file = "battery.csv"
 max_lines = 1000
 trim_buffer = 100
+max_charge_percent = 100
