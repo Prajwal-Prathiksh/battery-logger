@@ -35,20 +35,6 @@ func ParseBoolLoose(s string) (bool, error) {
 	}
 }
 
-// FilterWindow returns a slice of rows containing only those entries
-// that fall within the specified time duration before the last entry.
-func FilterWindow(rows []Row, since time.Duration) []Row {
-	if len(rows) == 0 {
-		return nil
-	}
-	cut := rows[len(rows)-1].T.Add(-since)
-	i := 0
-	for i < len(rows) && rows[i].T.Before(cut) {
-		i++
-	}
-	return rows[i:]
-}
-
 // WeightedLinReg performs weighted linear regression on battery data
 // using exponential weights (more recent data has higher weight).
 // x represents minutes relative to the last point (<=0), weights w = exp(alpha*x).
