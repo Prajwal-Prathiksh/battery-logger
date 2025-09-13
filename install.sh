@@ -7,6 +7,7 @@ echo "🔋 Installing Battery Logger..."
 
 # Build and install
 make setup
+make desktop-icon
 
 echo "✅ Battery Logger installed and started!"
 echo ""
@@ -19,3 +20,4 @@ echo "  make uninstall - Remove everything"
 echo ""
 echo "Log file: ~/.local/state/battery-logger/battery.csv"
 echo "Binary: ~/.local/bin/battery-logger"
+echo "Desktop icon: ~/.local/share/applications/battery-logger.desktop"

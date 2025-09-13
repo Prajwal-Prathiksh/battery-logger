@@ -72,3 +72,15 @@ help:
 	@echo "  clean         - Remove built binary"
 	@echo "  uninstall     - Remove everything"
 	@echo "  help          - Show this help"
+	@echo "  desktop-icon  - Install desktop icon for Battery Logger"
+
+# Install desktop icon
+desktop-icon:
+	mkdir -p $(HOME)/.local/share/applications
+	mkdir -p $(HOME)/.local/share/icons
+	cp assets/battery-logger.png $(HOME)/.local/share/icons/battery-logger.png
+	sed \
+		-e 's|@BINDIR@|$(BINDIR)|g' \
+		-e 's|@ICONDIR@|$(HOME)/.local/share/icons|g' \
+		battery-logger.desktop.in > $(HOME)/.local/share/applications/battery-logger.desktop
+
