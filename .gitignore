@@ -35,4 +35,4 @@ Thumbs.db
 *.csv
 
 # Binary files
-battery-logger
+/battery-logger
