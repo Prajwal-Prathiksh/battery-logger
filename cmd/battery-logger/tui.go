@@ -85,10 +85,10 @@ func createChartWidget() *widgets.TimeChart {
 		widgets.YRange(0, 100),
 		widgets.YLabel("%"),
 		widgets.Title("Battery % Over Time"),
-		widgets.DayHours(6, 18), // 6 AM to 6 PM is day
+		widgets.DayHours(7, 19), // 7 AM to 7 PM is day
 		widgets.DayNightColors(
-			cell.ColorNumber(248), // Very light gray for day (subtle)
-			cell.ColorNumber(240), // Slightly darker gray for night
+			cell.ColorNumber(237), // Dark gray for day (darker but still distinguishable)
+			cell.ColorNumber(0),   // True black for night (pitch black)
 		),
 	)
 }

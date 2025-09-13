@@ -69,11 +69,11 @@ func NewTimeChart(opts ...TimeChartOption) *TimeChart {
 		yLabel: "Battery %",
 		title:  "Battery Over Time",
 
-		// Sensible day/night color palette
-		dayColor:   cell.ColorNumber(248), // Very light gray for day (subtle)
-		nightColor: cell.ColorNumber(240), // Slightly darker gray for night
-		dayStart:   6,                     // 6 AM
-		dayEnd:     18,                    // 6 PM
+		// High contrast day/night color palette
+		dayColor:   cell.ColorNumber(237), // Dark gray for day (darker but still distinguishable)
+		nightColor: cell.ColorNumber(0),   // True black for night (pitch black)
+		dayStart:   7,                     // 7 AM
+		dayEnd:     19,                    // 7 PM
 
 		// Date annotation settings
 		showDates:     true,
@@ -201,9 +201,9 @@ func (tc *TimeChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 		return err
 	}
 
-	// Draw date annotations and midnight lines (always show)
+	// Draw date annotations (labels only, before braille)
 	if tc.showDates {
-		if err := tc.drawDateAnnotations(cvs, plotArea, startTime, endTime); err != nil {
+		if err := tc.drawDateLabels(cvs, plotArea, startTime, endTime); err != nil {
 			return err
 		}
 	}
@@ -222,7 +222,16 @@ func (tc *TimeChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 	}
 
 	// Copy braille canvas to main canvas while preserving background colors
-	return tc.copyBrailleWithBackground(bc, cvs, plotArea, startTime, endTime)
+	if err := tc.copyBrailleWithBackground(bc, cvs, plotArea, startTime, endTime); err != nil {
+		return err
+	}
+
+	// Draw day-break lines AFTER braille copy so they appear on top
+	if tc.showDates {
+		return tc.drawDayBreakLines(cvs, plotArea, startTime, endTime)
+	}
+
+	return nil
 }
 
 // drawDayNightBackground draws alternating day/night background colors
@@ -242,17 +251,14 @@ func (tc *TimeChart) drawDayNightBackground(cvs *canvas.Canvas, plotArea image.R
 		hour := pixelTime.Hour()
 
 		// Determine if it's day or night
-		var bgColor cell.Color
 		if hour >= tc.dayStart && hour < tc.dayEnd {
-			bgColor = tc.dayColor
-		} else {
-			bgColor = tc.nightColor
+			// Only fill day areas with light gray background
+			// Leave night areas untouched (transparent) for natural black appearance
+			for y := plotArea.Min.Y; y < plotArea.Max.Y; y++ {
+				cvs.SetCellOpts(image.Point{x, y}, cell.BgColor(tc.dayColor))
+			}
 		}
-
-		// Fill the column
-		for y := plotArea.Min.Y; y < plotArea.Max.Y; y++ {
-			cvs.SetCellOpts(image.Point{x, y}, cell.BgColor(bgColor))
-		}
+		// Night areas are left unfilled (transparent) for natural terminal black
 	}
 
 	return nil
@@ -295,7 +301,7 @@ func (tc *TimeChart) drawYLabels(cvs *canvas.Canvas, plotArea image.Rectangle) e
 		}
 
 		value := tc.yMin + (tc.yMax-tc.yMin)*float64(i)/float64(numLabels-1)
-		label := fmt.Sprintf("%.0f", value)
+		label := fmt.Sprintf("%.0f%%", value)
 
 		// Position label to the left of the Y-axis
 		labelPos := image.Point{plotArea.Min.X - len(label) - 1, y}
@@ -352,31 +358,64 @@ func (tc *TimeChart) drawXLabels(cvs *canvas.Canvas, plotArea image.Rectangle, s
 	return nil
 }
 
-// drawDateAnnotations draws date stamps and midnight lines for any time window
-func (tc *TimeChart) drawDateAnnotations(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
+// drawDateLabels draws date stamps above the chart (no vertical lines)
+func (tc *TimeChart) drawDateLabels(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
 	timeSpan := endTime.Sub(startTime)
 	width := plotArea.Dx()
 
 	// Find midnight boundaries within the time range
-	current := startTime.Truncate(24 * time.Hour)
-	if current.Before(startTime) {
+	// Start from the beginning of the day containing startTime
+	year, month, day := startTime.Date()
+	current := time.Date(year, month, day, 0, 0, 0, 0, startTime.Location())
+
+	// If this midnight is before our start time, move to next midnight
+	if current.Before(startTime) || current.Equal(startTime) {
 		current = current.Add(24 * time.Hour)
 	}
 
 	for current.Before(endTime) {
 		x := plotArea.Min.X + int(float64(width)*current.Sub(startTime).Seconds()/timeSpan.Seconds())
 		if x >= plotArea.Min.X && x < plotArea.Max.X {
-			// Draw a thin vertical line at midnight (day break)
-			for y := plotArea.Min.Y; y < plotArea.Max.Y; y++ {
-				cvs.SetCellOpts(image.Point{x, y}, cell.FgColor(cell.ColorNumber(244)))
-			}
-
 			// Draw date label above the chart
 			dateLabel := current.Format("Jan 2")
 			labelPos := image.Point{x - len(dateLabel)/2, plotArea.Min.Y - 1}
 			if labelPos.Y >= 0 {
 				draw.Text(cvs, dateLabel, labelPos,
-					draw.TextCellOpts(cell.FgColor(cell.ColorWhite), cell.Bold()))
+					draw.TextCellOpts(cell.FgColor(cell.ColorCyan), cell.Bold()))
+			}
+		}
+		current = current.Add(24 * time.Hour)
+	}
+
+	return nil
+}
+
+// drawDayBreakLines draws bright dashed vertical lines at midnight (drawn on top)
+func (tc *TimeChart) drawDayBreakLines(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
+	timeSpan := endTime.Sub(startTime)
+	width := plotArea.Dx()
+
+	// Find midnight boundaries within the time range
+	// Start from the beginning of the day containing startTime
+	year, month, day := startTime.Date()
+	current := time.Date(year, month, day, 0, 0, 0, 0, startTime.Location())
+
+	// If this midnight is before our start time, move to next midnight
+	if current.Before(startTime) || current.Equal(startTime) {
+		current = current.Add(24 * time.Hour)
+	}
+
+	for current.Before(endTime) {
+		x := plotArea.Min.X + int(float64(width)*current.Sub(startTime).Seconds()/timeSpan.Seconds())
+		if x >= plotArea.Min.X && x < plotArea.Max.X {
+			// Draw a bright dashed vertical line at midnight (day break)
+			for y := plotArea.Min.Y; y < plotArea.Max.Y; y++ {
+				// Create dashed effect by alternating characters every 2 rows
+				if y%2 == 0 {
+					cvs.SetCell(image.Point{x, y}, '┊', cell.FgColor(cell.ColorCyan))
+				} else {
+					cvs.SetCell(image.Point{x, y}, ' ', cell.FgColor(cell.ColorCyan))
+				}
 			}
 		}
 		current = current.Add(24 * time.Hour)
@@ -465,25 +504,19 @@ func (tc *TimeChart) copyBrailleWithBackground(bc *braille.Canvas, cvs *canvas.C
 		return err
 	}
 
-	// Then apply background colors to the entire plot area
-	// This approach overlays background colors while preserving foreground content
+	// Then apply background colors only to day areas
+	// Leave night areas untouched for natural terminal black
 	for y := plotArea.Min.Y; y < plotArea.Max.Y; y++ {
 		for x := plotArea.Min.X; x < plotArea.Max.X; x++ {
-			// Calculate the time for this x position to determine background color
+			// Calculate the time for this x position to determine if it's day
 			pixelTime := startTime.Add(time.Duration(x-plotArea.Min.X) * timeSpan / time.Duration(plotArea.Dx()))
 			hour := pixelTime.Hour()
 
-			// Determine background color
-			var bgColor cell.Color
+			// Only apply background color during day hours
+			// Night areas remain untouched (transparent) for natural black
 			if hour >= tc.dayStart && hour < tc.dayEnd {
-				bgColor = tc.dayColor
-			} else {
-				bgColor = tc.nightColor
+				cvs.SetCellOpts(image.Point{x, y}, cell.BgColor(tc.dayColor))
 			}
-
-			// Apply background color to this cell
-			// This preserves any existing foreground content from the braille canvas
-			cvs.SetCellOpts(image.Point{x, y}, cell.BgColor(bgColor))
 		}
 	}
 
