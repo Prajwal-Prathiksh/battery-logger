@@ -65,6 +65,10 @@ type BatteryChart struct {
 	minWindow time.Duration // minimum zoom window (5m)
 	maxWindow time.Duration // maximum zoom window (7d)
 
+	// Data bounds for limiting pan operations
+	dataStart time.Time // earliest data point
+	dataEnd   time.Time // latest data point
+
 	// Callback for when zoom/pan changes
 	onZoomChange func(startTime time.Time, endTime time.Time, duration time.Duration)
 }
@@ -162,6 +166,38 @@ func DayHours(start, end int) BatteryChartOption {
 // SetSeries sets the data series for the chart
 func (tc *BatteryChart) SetSeries(series []TimeSeries) {
 	tc.series = series
+	tc.updateDataBounds()
+}
+
+// updateDataBounds calculates and stores the earliest and latest data points
+func (tc *BatteryChart) updateDataBounds() {
+	if len(tc.series) == 0 {
+		return
+	}
+
+	// Find the earliest and latest data points across all series
+	var earliest, latest time.Time
+	first := true
+
+	for _, s := range tc.series {
+		for _, p := range s.Points {
+			if first {
+				earliest = p.Time
+				latest = p.Time
+				first = false
+			} else {
+				if p.Time.Before(earliest) {
+					earliest = p.Time
+				}
+				if p.Time.After(latest) {
+					latest = p.Time
+				}
+			}
+		}
+	}
+
+	tc.dataStart = earliest
+	tc.dataEnd = latest
 }
 
 // AddSeries adds a single series to the chart
@@ -171,11 +207,15 @@ func (tc *BatteryChart) AddSeries(name string, points []TimePoint, color cell.Co
 		Points: points,
 		Color:  color,
 	})
+	tc.updateDataBounds()
 }
 
 // ClearSeries removes all series from the chart
 func (tc *BatteryChart) ClearSeries() {
 	tc.series = tc.series[:0]
+	// Reset data bounds when clearing series
+	tc.dataStart = time.Time{}
+	tc.dataEnd = time.Time{}
 }
 
 // SetWindow updates the base time window for the chart
@@ -676,16 +716,42 @@ func (tc *BatteryChart) zoomToSelection() error {
 
 // pan moves the view left/right while maintaining zoom level
 func (tc *BatteryChart) pan(right bool) error {
+	// Don't pan if no data bounds are set
+	if tc.dataStart.IsZero() || tc.dataEnd.IsZero() {
+		return nil
+	}
+
 	// Pan distance is 10% of current window
 	panDistance := time.Duration(float64(tc.currentWindow) * 0.1)
 
+	var newStart, newEnd time.Time
 	if right {
-		tc.windowStart = tc.windowStart.Add(panDistance)
-		tc.windowEnd = tc.windowEnd.Add(panDistance)
+		newStart = tc.windowStart.Add(panDistance)
+		newEnd = tc.windowEnd.Add(panDistance)
 	} else {
-		tc.windowStart = tc.windowStart.Add(-panDistance)
-		tc.windowEnd = tc.windowEnd.Add(-panDistance)
+		newStart = tc.windowStart.Add(-panDistance)
+		newEnd = tc.windowEnd.Add(-panDistance)
 	}
+
+	// Check bounds and limit panning
+	// Don't allow the view to go beyond the data range
+	if newStart.Before(tc.dataStart) {
+		// Adjust to keep the start at data start
+		newStart = tc.dataStart
+		newEnd = newStart.Add(tc.currentWindow)
+	}
+	if newEnd.After(tc.dataEnd) {
+		// Adjust to keep the end at data end
+		newEnd = tc.dataEnd
+		newStart = newEnd.Add(-tc.currentWindow)
+		// If the window is larger than the data range, center it
+		if newStart.Before(tc.dataStart) {
+			newStart = tc.dataStart
+		}
+	}
+
+	tc.windowStart = newStart
+	tc.windowEnd = newEnd
 
 	// Trigger callback to update title
 	tc.triggerZoomChange()
