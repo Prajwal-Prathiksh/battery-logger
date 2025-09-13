@@ -14,6 +14,7 @@ import (
 
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/config"
+	"github.com/Prajwal-Prathiksh/battery-logger/internal/sysfs"
 
 	"github.com/mum4k/termdash"
 	"github.com/mum4k/termdash/cell"
@@ -75,6 +76,8 @@ type StatusInfo struct {
 	CurrentWindow    time.Duration
 	LogPath          string
 	MaxChargePercent int
+	CycleCount       int
+	HasCycleCount    bool
 }
 
 // createChartWidget creates and configures the line chart widget
@@ -339,6 +342,9 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 	// Get current UI parameters for display
 	currentWindow, _, _ := uiParams.Get()
 
+	// Get battery cycle count
+	cycleCount, hasCycleCount := sysfs.BatteryCycleCount()
+
 	return StatusInfo{
 		Latest:           latest,
 		TransitionTime:   transitionTime,
@@ -357,6 +363,8 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 		CurrentWindow:    currentWindow,
 		LogPath:          logPath,
 		MaxChargePercent: cfg.MaxChargePercent,
+		CycleCount:       cycleCount,
+		HasCycleCount:    hasCycleCount,
 	}
 }
 
@@ -389,6 +397,15 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 	statusLines := []string{
 		fmt.Sprintf("%s AC Status: %s%s", acIcon, acStatus, sinceStr),
 		fmt.Sprintf("🔋 Current Battery: %.1f%%", info.Latest.Batt),
+	}
+
+	// Add cycle count if available
+	if info.HasCycleCount {
+		statusLines = append(statusLines, fmt.Sprintf("🔄 Battery Cycles: %d", info.CycleCount))
+	}
+
+	// Continue with rest of the status lines
+	remainingLines := []string{
 		fmt.Sprintf("📈 %s: %s %s", info.RateLabel, info.SlopeStr, info.Confidence),
 		timeDisplayText,
 		"",
@@ -401,6 +418,8 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 		fmt.Sprintf("📄 Data file: %s", info.LogPath),
 		info.ConfigStr,
 	}
+
+	statusLines = append(statusLines, remainingLines...)
 
 	for _, line := range statusLines {
 		var opts []text.WriteOption

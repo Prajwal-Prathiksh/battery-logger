@@ -46,3 +46,12 @@ func ACOnline() bool {
 	}
 	return false
 }
+
+func BatteryCycleCount() (int, bool) {
+	if s, ok := readFirst("/sys/class/power_supply/BAT*/cycle_count"); ok {
+		if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+			return v, true
+		}
+	}
+	return 0, false
+}
