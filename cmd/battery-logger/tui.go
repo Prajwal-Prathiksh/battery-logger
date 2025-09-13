@@ -25,6 +25,19 @@ import (
 	"github.com/mum4k/termdash/widgets/text"
 )
 
+// formatDurationAuto formats a duration as HH:mm if <24h, or as Xd Yh if >=24h
+func formatDurationAuto(dur time.Duration) string {
+	if dur < 24*time.Hour {
+		h := int(dur.Hours())
+		m := int(dur.Minutes()) % 60
+		return fmt.Sprintf("%02dh %02dm", h, m)
+	} else {
+		days := int(dur.Hours()) / 24
+		hours := int(dur.Hours()) % 24
+		return fmt.Sprintf("%dd %dh", days, hours)
+	}
+}
+
 // UIParams holds the real-time adjustable parameters
 type UIParams struct {
 	Refresh time.Duration
@@ -161,18 +174,7 @@ func updateChartWidget(chartWidget *widgets.BatteryChart, series []widgets.TimeS
 // updateChartTitleFromZoom updates the chart title with the current zoom duration
 func updateChartTitleFromZoom(c *container.Container, startTime, endTime time.Time) {
 	timeDiff := endTime.Sub(startTime)
-	var span string
-
-	if timeDiff < time.Minute {
-		span = fmt.Sprintf("%.0fs", timeDiff.Seconds())
-	} else if timeDiff < time.Hour {
-		span = fmt.Sprintf("%.1fm", timeDiff.Minutes())
-	} else if timeDiff < 24*time.Hour {
-		span = fmt.Sprintf("%.1fh", timeDiff.Hours())
-	} else {
-		span = fmt.Sprintf("%.1fd", timeDiff.Hours()/24)
-	}
-
+	span := formatDurationAuto(timeDiff.Round(time.Minute))
 	title := fmt.Sprintf("Battery %% Over Time [%s] - i/o/mouse wheel: zoom, ←→: pan, esc: reset", span)
 	c.Update("chart-container", container.BorderTitle(title))
 }
@@ -201,7 +203,9 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 				// Charging mode
 				rateLabel = "Charge Rate"
 				if rate > 1e-6 {
-					est = analytics.FmtDur(estimateMins)
+					// Format estimate automatically: <24h as HH:mm, >=24h as Days Hours
+					dur := time.Duration(estimateMins * float64(time.Minute)).Round(time.Minute)
+					est = formatDurationAuto(dur)
 				} else {
 					est = "∞ (not charging or already full)"
 				}
@@ -209,7 +213,9 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 				// Discharging mode
 				rateLabel = "Discharge Rate"
 				if rate < -1e-6 {
-					est = analytics.FmtDur(estimateMins)
+					// Format estimate automatically: <24h as HH:mm, >=24h as Days Hours
+					dur := time.Duration(estimateMins * float64(time.Minute)).Round(time.Minute)
+					est = formatDurationAuto(dur)
 				} else {
 					est = "∞ (not discharging)"
 				}
@@ -255,8 +261,8 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 
 	// Calculate time range
 	timeRange := rows[len(rows)-1].T.Sub(rows[0].T)
-	startTime := rows[0].T.Format("15:04")
-	endTime := rows[len(rows)-1].T.Format("15:04")
+	startTime := rows[0].T.Format("Jan 2 15:04")
+	endTime := rows[len(rows)-1].T.Format("Jan 2 15:04")
 
 	// Get config file paths
 	_, existingConfigPaths := config.GetConfigPaths()
@@ -308,7 +314,7 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 
 	var sinceStr string
 	if !info.TransitionTime.IsZero() {
-		sinceStr = fmt.Sprintf(" (Since: %s, %.1f%%)", info.TransitionTime.Format("15:04"), info.TransitionBatt)
+		sinceStr = fmt.Sprintf(" (Since: %s, %.1f%%)", info.TransitionTime.Format("Jan 2 15:04"), info.TransitionBatt)
 	}
 
 	// Determine time estimation label based on AC state
@@ -336,7 +342,7 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 		timeDisplayText,
 		"",
 		"📊 Data Summary:",
-		fmt.Sprintf("   Total samples: %d (spanning %s)", info.TotalSamples, info.TimeRange.Round(time.Minute).String()),
+		fmt.Sprintf("   Total samples: %d (spanning %s)", info.TotalSamples, formatDurationAuto(info.TimeRange.Round(time.Minute))),
 		fmt.Sprintf("   AC plugged: %d samples", info.ACSamples),
 		fmt.Sprintf("   On battery: %d samples", info.BattSamples),
 		fmt.Sprintf("   Time range: %s to %s", info.StartTime, info.EndTime),
