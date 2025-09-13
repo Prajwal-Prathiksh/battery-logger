@@ -113,10 +113,10 @@ func FilterContiguousACState(rows []Row, acState bool) []Row {
 }
 
 // CalculateRateAndEstimate calculates the battery rate and time estimate based on AC state.
-// For charging (AC=true): returns positive rate and time to 100%.
+// For charging (AC=true): returns positive rate and time to maxChargePercent.
 // For discharging (AC=false): returns negative rate and time to 0%.
 // Returns rate (% per minute), estimate (minutes), confidence string, and success flag.
-func CalculateRateAndEstimate(rows []Row, currentBatt float64, alpha float64) (float64, float64, string, bool) {
+func CalculateRateAndEstimate(rows []Row, currentBatt float64, alpha float64, maxChargePercent int) (float64, float64, string, bool) {
 	if len(rows) < 2 {
 		return 0, 0, "(need ≥2 samples with same AC state)", false
 	}
@@ -135,7 +135,7 @@ func CalculateRateAndEstimate(rows []Row, currentBatt float64, alpha float64) (f
 	if isCharging {
 		// When charging, rate should be positive (battery % increasing)
 		if rate > 1e-6 { // Positive rate means charging
-			estimate = (100 - currentBatt) / rate // Time to reach 100%
+			estimate = (float64(maxChargePercent) - currentBatt) / rate // Time to reach max charge
 			confidence = fmt.Sprintf("(based on %d charging samples)", len(rows))
 		} else {
 			// Rate is negative or zero while plugged in - not actually charging
