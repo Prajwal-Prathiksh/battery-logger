@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Battery Logger
+Exec=@BINDIR@/battery-logger tui
+Icon=@ICONDIR@/battery-logger.png
+Terminal=true
+Categories=Utility;System;
