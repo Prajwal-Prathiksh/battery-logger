@@ -312,11 +312,6 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 		acIcon = "🔌"
 	}
 
-	var sinceStr string
-	if !info.TransitionTime.IsZero() {
-		sinceStr = fmt.Sprintf(" (Since: %s, %.1f%%)", info.TransitionTime.Format("Jan 2 15:04"), info.TransitionBatt)
-	}
-
 	// Determine time estimation label based on AC state
 	var timeDisplayText string
 	if info.Latest.AC {
@@ -327,9 +322,26 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 
 	// Write status information
 	statusLines := []string{
-		fmt.Sprintf("%s AC Status: %s%s", acIcon, acStatus, sinceStr),
-		fmt.Sprintf("🔋 Current Battery: %.1f%%", info.Latest.Batt),
+		fmt.Sprintf("%s AC Status: %s", acIcon, acStatus),
 	}
+
+	// Show delta in a more UI/UX friendly way
+	if !info.TransitionTime.IsZero() {
+		durationSince := info.Latest.T.Sub(info.TransitionTime).Round(time.Minute)
+		battDrop := info.TransitionBatt - info.Latest.Batt
+		var deltaLine string
+		if info.Latest.AC {
+			// Plugged in: show time since plugged in and battery gained
+			battGain := info.Latest.Batt - info.TransitionBatt
+			deltaLine = fmt.Sprintf("   Plugged in for %s, battery ↑ %.1f%% (start: %.1f%%)", formatDurationAuto(durationSince), battGain, info.TransitionBatt)
+		} else {
+			// On battery: show time since unplugged and battery dropped, with since timestamp
+			deltaLine = fmt.Sprintf("   On battery for %s (since: %s), battery ↓ %.1f%% (start: %.1f%%)", formatDurationAuto(durationSince), info.TransitionTime.Format("Jan 2 15:04"), battDrop, info.TransitionBatt)
+		}
+		statusLines = append(statusLines, deltaLine)
+	}
+
+	statusLines = append(statusLines, fmt.Sprintf("🔋 Current Battery: %.1f%%", info.Latest.Batt))
 
 	// Add cycle count if available
 	if info.HasCycleCount {
