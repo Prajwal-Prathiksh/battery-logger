@@ -481,7 +481,7 @@ func (tc *BatteryChart) drawDateLabels(cvs *canvas.Canvas, plotArea image.Rectan
 		x := plotArea.Min.X + int(float64(width)*current.Sub(startTime).Seconds()/timeSpan.Seconds())
 		if x >= plotArea.Min.X && x < plotArea.Max.X {
 			// Draw date label above the chart
-			dateLabel := current.Format("Jan 2")
+			dateLabel := current.Format("Mon, Jan 2")
 			labelPos := image.Point{x - len(dateLabel)/2, plotArea.Min.Y - 1}
 			if labelPos.Y >= 0 {
 				draw.Text(cvs, dateLabel, labelPos,
