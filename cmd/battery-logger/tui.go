@@ -29,24 +29,16 @@ import (
 
 // UIParams holds the real-time adjustable parameters
 type UIParams struct {
-	Window  time.Duration
 	Alpha   float64
 	Refresh time.Duration
 	mu      sync.RWMutex
 }
 
 // Get returns thread-safe copies of the parameters
-func (p *UIParams) Get() (time.Duration, float64, time.Duration) {
+func (p *UIParams) Get() (float64, time.Duration) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.Window, p.Alpha, p.Refresh
-}
-
-// SetWindow sets the window parameter thread-safely
-func (p *UIParams) SetWindow(window time.Duration) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.Window = window
+	return p.Alpha, p.Refresh
 }
 
 // SetAlpha sets the alpha parameter thread-safely
@@ -72,7 +64,6 @@ type StatusInfo struct {
 	StartTime        string
 	EndTime          string
 	ConfigStr        string
-	CurrentWindow    time.Duration
 	LogPath          string
 	MaxChargePercent int
 	CycleCount       int
@@ -99,29 +90,7 @@ func createTextWidget() (*text.Text, error) {
 }
 
 // createInputWidgets creates the parameter input widgets with callbacks
-func createInputWidgets(windowStr string, alpha float64, uiParams *UIParams, updateData *func() error) (*textinput.TextInput, *textinput.TextInput, error) {
-	windowInput, err := textinput.New(
-		textinput.Label("Window (time span to show): ", cell.FgColor(cell.ColorCyan)),
-		textinput.DefaultText(windowStr),
-		textinput.MaxWidthCells(12),
-		textinput.PlaceHolder("e.g., 6h, 30m"),
-		textinput.OnSubmit(func(text string) error {
-			if d, err := time.ParseDuration(text); err == nil {
-				uiParams.SetWindow(d)
-				// Auto-refresh data with new window setting
-				if *updateData != nil {
-					if err := (*updateData)(); err != nil {
-						log.Printf("Auto-refresh after window change error: %v", err)
-					}
-				}
-			}
-			return nil
-		}),
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating window input: %v", err)
-	}
-
+func createInputWidgets(alpha float64, uiParams *UIParams, updateData *func() error) (*textinput.TextInput, error) {
 	alphaInput, err := textinput.New(
 		textinput.Label("Alpha (decay rate/min): ", cell.FgColor(cell.ColorCyan)),
 		textinput.DefaultText(fmt.Sprintf("%.3f", alpha)),
@@ -141,14 +110,14 @@ func createInputWidgets(windowStr string, alpha float64, uiParams *UIParams, upd
 		}),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating alpha input: %v", err)
+		return nil, fmt.Errorf("creating alpha input: %v", err)
 	}
 
-	return windowInput, alphaInput, nil
+	return alphaInput, nil
 }
 
 // createUILayout creates the TUI container layout with all widgets
-func createUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, textWidget *text.Text, windowInput, alphaInput *textinput.TextInput) (*container.Container, error) {
+func createUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, textWidget *text.Text, alphaInput *textinput.TextInput) (*container.Container, error) {
 	return container.New(
 		t,
 		container.Border(linestyle.Light),
@@ -171,15 +140,7 @@ func createUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, t
 					container.Bottom(
 						container.Border(linestyle.Light),
 						container.BorderTitle("Settings - Press Enter to apply"),
-						container.SplitVertical(
-							container.Left(
-								container.PlaceWidget(windowInput),
-							),
-							container.Right(
-								container.PlaceWidget(alphaInput),
-							),
-							container.SplitPercent(50),
-						),
+						container.PlaceWidget(alphaInput),
 					),
 					container.SplitFixedFromEnd(4),
 				),
@@ -335,9 +296,6 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 		configStr = fmt.Sprintf("📋 Config files: %s (+ %d more)", existingConfigPaths[len(existingConfigPaths)-1], len(existingConfigPaths)-1)
 	}
 
-	// Get current UI parameters for display
-	currentWindow, _, _ := uiParams.Get()
-
 	// Get battery cycle count
 	cycleCount, hasCycleCount := sysfs.BatteryCycleCount()
 
@@ -356,7 +314,6 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 		StartTime:        startTime,
 		EndTime:          endTime,
 		ConfigStr:        configStr,
-		CurrentWindow:    currentWindow,
 		LogPath:          logPath,
 		MaxChargePercent: cfg.MaxChargePercent,
 		CycleCount:       cycleCount,
@@ -405,7 +362,7 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 		fmt.Sprintf("📈 %s: %s %s", info.RateLabel, info.SlopeStr, info.Confidence),
 		timeDisplayText,
 		"",
-		fmt.Sprintf("📊 Data Summary (window: %s):", info.CurrentWindow),
+		"📊 Data Summary:",
 		fmt.Sprintf("   Total samples: %d (spanning %s)", info.TotalSamples, info.TimeRange.Round(time.Minute).String()),
 		fmt.Sprintf("   AC plugged: %d samples", info.ACSamples),
 		fmt.Sprintf("   On battery: %d samples", info.BattSamples),
@@ -436,7 +393,7 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 // setupDataRefresh sets up periodic data refresh and returns the update function
 func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.BatteryChart, textWidget *text.Text, cfg config.Config) (func() error, error) {
 	updateData := func() error {
-		_, alpha, _ := uiParams.Get()
+		alpha, _ := uiParams.Get()
 
 		rows, err := readCSV(logPath)
 		if err != nil || len(rows) == 0 {
@@ -470,7 +427,7 @@ func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, c
 	}
 
 	// Set up periodic refresh
-	_, _, currentRefresh := uiParams.Get()
+	_, currentRefresh := uiParams.Get()
 	refreshTicker := time.NewTicker(currentRefresh)
 
 	go func() {
@@ -506,25 +463,17 @@ func createKeyboardHandler(cancel context.CancelFunc, updateData func() error) f
 
 // runTUI implements the TUI command using termdash with real-time parameter controls
 func runTUI() {
-	var windowStr string
 	var alpha float64
 
 	fs := flag.NewFlagSet("tui", flag.ExitOnError)
-	fs.StringVar(&windowStr, "window", "10h", "rolling window to display & regress (e.g., 10m, 30m, 2h)")
 	fs.Float64Var(&alpha, "alpha", 0.05, "exponential decay per minute for weights (e.g., 0.05)")
 
 	if len(os.Args) > 2 {
 		fs.Parse(os.Args[2:])
 	}
 
-	window, err := time.ParseDuration(windowStr)
-	if err != nil {
-		log.Fatalf("bad -window: %v", err)
-	}
-
 	// Initialize UI parameters with defaults - refresh is fixed at 10s
 	uiParams := &UIParams{
-		Window:  window,
 		Alpha:   alpha,
 		Refresh: 10 * time.Second, // Fixed refresh rate
 	}
@@ -551,13 +500,13 @@ func runTUI() {
 	var updateData func() error
 
 	// Create parameter control widgets with auto-refresh callbacks
-	windowInput, alphaInput, err := createInputWidgets(windowStr, alpha, uiParams, &updateData)
+	alphaInput, err := createInputWidgets(alpha, uiParams, &updateData)
 	if err != nil {
 		log.Fatalf("createInputWidgets => %v", err)
 	}
 
 	// Set up the container with layout including controls
-	c, err := createUILayout(t, chartWidget, textWidget, windowInput, alphaInput)
+	c, err := createUILayout(t, chartWidget, textWidget, alphaInput)
 	if err != nil {
 		log.Fatalf("createUILayout => %v", err)
 	}
@@ -580,7 +529,7 @@ func runTUI() {
 	keyboardHandler := createKeyboardHandler(cancel, updateData)
 
 	// Run the dashboard
-	_, _, currentRefresh := uiParams.Get()
+	_, currentRefresh := uiParams.Get()
 	if err := termdash.Run(ctx, t, c, termdash.KeyboardSubscriber(keyboardHandler), termdash.RedrawInterval(currentRefresh)); err != nil {
 		log.Fatalf("termdash.Run => %v", err)
 	}
