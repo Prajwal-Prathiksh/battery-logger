@@ -148,6 +148,10 @@ func loadConfigFile(path string, cfg *Config) error {
 			if val, err := strconv.Atoi(value); err == nil {
 				cfg.TrimBuffer = val
 			}
+		case "max_charge_percent":
+			if val, err := strconv.Atoi(value); err == nil {
+				cfg.MaxChargePercent = val
+			}
 		}
 	}
 
