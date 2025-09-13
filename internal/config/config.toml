@@ -3,7 +3,7 @@ interval_secs_on_ac = 60
 timezone = "Local"
 log_dir = "~/.local/state/battery-logger"
 log_file = "battery.csv"
-max_lines = 1000
+max_lines = 2000
 trim_buffer = 100
 max_charge_percent = 100
 
