@@ -626,12 +626,19 @@ func (tc *BatteryChart) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventM
 	case keyboard.KeyArrowRight:
 		// Pan right (forward in time)
 		return tc.pan(true)
+	case 'i', 'I':
+		// Zoom in (reduce window size)
+		return tc.zoom(true, image.Point{})
+	case 'o', 'O':
+		// Zoom out (increase window size)
+		return tc.zoom(false, image.Point{})
 	case keyboard.KeyEsc:
 		// Reset zoom to base window
 		tc.currentWindow = tc.baseWindow
 		now := time.Now()
 		tc.windowEnd = now
 		tc.windowStart = now.Add(-tc.baseWindow)
+		tc.triggerZoomChange()
 		return nil
 	}
 	return nil
