@@ -58,22 +58,23 @@ func (p *UIParams) SetAlpha(alpha float64) {
 
 // StatusInfo holds information needed for status display
 type StatusInfo struct {
-	Latest         analytics.Row
-	TransitionTime time.Time
-	TransitionBatt float64
-	RateLabel      string
-	SlopeStr       string
-	Confidence     string
-	Estimate       string
-	TotalSamples   int
-	ACSamples      int
-	BattSamples    int
-	TimeRange      time.Duration
-	StartTime      string
-	EndTime        string
-	ConfigStr      string
-	CurrentWindow  time.Duration
-	LogPath        string
+	Latest           analytics.Row
+	TransitionTime   time.Time
+	TransitionBatt   float64
+	RateLabel        string
+	SlopeStr         string
+	Confidence       string
+	Estimate         string
+	TotalSamples     int
+	ACSamples        int
+	BattSamples      int
+	TimeRange        time.Duration
+	StartTime        string
+	EndTime          string
+	ConfigStr        string
+	CurrentWindow    time.Duration
+	LogPath          string
+	MaxChargePercent int
 }
 
 // createChartWidget creates and configures the line chart widget
@@ -244,7 +245,7 @@ func updateChartWidget(chartWidget *linechart.LineChart, acValues, battValues []
 }
 
 // generateStatusInfo processes battery data to create status information
-func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams, logPath string) StatusInfo {
+func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams, logPath string, cfg config.Config) StatusInfo {
 	latest := rows[len(rows)-1]
 
 	// Find when the current AC status started
@@ -260,7 +261,7 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 	var rateLabel string
 
 	if len(contiguousSamples) >= 2 {
-		rate, estimateMins, conf, ok := analytics.CalculateRateAndEstimate(contiguousSamples, latest.Batt, alpha)
+		rate, estimateMins, conf, ok := analytics.CalculateRateAndEstimate(contiguousSamples, latest.Batt, alpha, cfg.MaxChargePercent)
 
 		if ok {
 			if currentACState {
@@ -339,22 +340,23 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 	currentWindow, _, _ := uiParams.Get()
 
 	return StatusInfo{
-		Latest:         latest,
-		TransitionTime: transitionTime,
-		TransitionBatt: transitionBatt,
-		RateLabel:      rateLabel,
-		SlopeStr:       slopeStr,
-		Confidence:     confidence,
-		Estimate:       est,
-		TotalSamples:   totalSamples,
-		ACSamples:      acSamples,
-		BattSamples:    battSamples,
-		TimeRange:      timeRange,
-		StartTime:      startTime,
-		EndTime:        endTime,
-		ConfigStr:      configStr,
-		CurrentWindow:  currentWindow,
-		LogPath:        logPath,
+		Latest:           latest,
+		TransitionTime:   transitionTime,
+		TransitionBatt:   transitionBatt,
+		RateLabel:        rateLabel,
+		SlopeStr:         slopeStr,
+		Confidence:       confidence,
+		Estimate:         est,
+		TotalSamples:     totalSamples,
+		ACSamples:        acSamples,
+		BattSamples:      battSamples,
+		TimeRange:        timeRange,
+		StartTime:        startTime,
+		EndTime:          endTime,
+		ConfigStr:        configStr,
+		CurrentWindow:    currentWindow,
+		LogPath:          logPath,
+		MaxChargePercent: cfg.MaxChargePercent,
 	}
 }
 
@@ -378,7 +380,7 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 	// Determine time estimation label based on AC state
 	var timeDisplayText string
 	if info.Latest.AC {
-		timeDisplayText = fmt.Sprintf("⏱️  Time to Full (100%%): %s", info.Estimate)
+		timeDisplayText = fmt.Sprintf("⏱️  Time to Full (%d%%): %s", info.MaxChargePercent, info.Estimate)
 	} else {
 		timeDisplayText = fmt.Sprintf("⏱️  Time to Empty (0%%): %s", info.Estimate)
 	}
@@ -417,7 +419,7 @@ func updateStatusText(textWidget *text.Text, info StatusInfo) {
 }
 
 // setupDataRefresh sets up periodic data refresh and returns the update function
-func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *linechart.LineChart, textWidget *text.Text) (func() error, error) {
+func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *linechart.LineChart, textWidget *text.Text, cfg config.Config) (func() error, error) {
 	updateData := func() error {
 		window, alpha, _ := uiParams.Get()
 
@@ -447,7 +449,7 @@ func setupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, c
 		}
 
 		// Generate and update status text
-		statusInfo := generateStatusInfo(rows, alpha, uiParams, logPath)
+		statusInfo := generateStatusInfo(rows, alpha, uiParams, logPath, cfg)
 		updateStatusText(textWidget, statusInfo)
 
 		return nil
@@ -513,8 +515,8 @@ func runTUI() {
 		Refresh: 10 * time.Second, // Fixed refresh rate
 	}
 
-	// Get the log file path using the config system
-	_, logPath := loadPaths()
+	// Get the log file path and config using the config system
+	cfg, logPath := loadPaths()
 
 	// Create terminal
 	t, err := tcell.New()
@@ -553,7 +555,7 @@ func runTUI() {
 	defer cancel()
 
 	// Set up data refresh and get the update function
-	updateData, err = setupDataRefresh(ctx, logPath, uiParams, chartWidget, textWidget)
+	updateData, err = setupDataRefresh(ctx, logPath, uiParams, chartWidget, textWidget, cfg)
 	if err != nil {
 		log.Fatalf("setupDataRefresh => %v", err)
 	}
