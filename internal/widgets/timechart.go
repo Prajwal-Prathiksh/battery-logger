@@ -328,33 +328,33 @@ func (tc *BatteryChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 	return nil
 }
 
-// drawDayNightBackground draws alternating day/night background colors
+// drawDayNightBackground fills the plot area with day/night background colors
 func (tc *BatteryChart) drawDayNightBackground(cvs *canvas.Canvas, plotArea image.Rectangle, startTime, endTime time.Time) error {
 	timeSpan := endTime.Sub(startTime)
 	if timeSpan <= 0 {
 		return nil
 	}
 
-	// Calculate time per pixel
 	pixelWidth := plotArea.Dx()
 	timePerPixel := timeSpan / time.Duration(pixelWidth)
 
 	for x := plotArea.Min.X; x < plotArea.Max.X; x++ {
-		// Calculate the time for this x position
 		pixelTime := startTime.Add(time.Duration(x-plotArea.Min.X) * timePerPixel)
 		hour := pixelTime.Hour()
 
-		// Determine if it's day or night
-		if hour >= tc.dayStart && hour < tc.dayEnd {
-			// Only fill day areas with light gray background
-			// Leave night areas untouched (transparent) for natural black appearance
+		// Night = [0, dayStart) ∪ [dayEnd, 24)
+		if !(hour >= tc.dayStart && hour < tc.dayEnd) {
 			for y := plotArea.Min.Y; y < plotArea.Max.Y; y++ {
+				// Fill night with the configured nightColor
+				cvs.SetCellOpts(image.Point{x, y}, cell.BgColor(tc.nightColor))
+			}
+		} else {
+			for y := plotArea.Min.Y; y < plotArea.Max.Y; y++ {
+				// Fill day with the configured dayColor
 				cvs.SetCellOpts(image.Point{x, y}, cell.BgColor(tc.dayColor))
 			}
 		}
-		// Night areas are left unfilled (transparent) for natural terminal black
 	}
-
 	return nil
 }
 
@@ -608,18 +608,18 @@ func (tc *BatteryChart) copyBrailleWithBackground(bc *braille.Canvas, cvs *canva
 		return err
 	}
 
-	// Then apply background colors only to day areas
-	// Leave night areas untouched for natural terminal black
+	// Then apply background colors based on day/night settings
 	for y := plotArea.Min.Y; y < plotArea.Max.Y; y++ {
 		for x := plotArea.Min.X; x < plotArea.Max.X; x++ {
 			// Calculate the time for this x position to determine if it's day
 			pixelTime := startTime.Add(time.Duration(x-plotArea.Min.X) * timeSpan / time.Duration(plotArea.Dx()))
 			hour := pixelTime.Hour()
 
-			// Only apply background color during day hours
-			// Night areas remain untouched (transparent) for natural black
+			// Apply background color based on day/night settings
 			if hour >= tc.dayStart && hour < tc.dayEnd {
 				cvs.SetCellOpts(image.Point{x, y}, cell.BgColor(tc.dayColor))
+			} else {
+				cvs.SetCellOpts(image.Point{x, y}, cell.BgColor(tc.nightColor))
 			}
 		}
 	}
