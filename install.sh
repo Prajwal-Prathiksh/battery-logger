@@ -3,13 +3,13 @@
 
 set -e
 
-echo "🔋 Installing Battery Logger..."
+echo "  Installing Battery Logger..."
 
 # Build and install
 make setup
 make desktop-icon
 
-echo "✅ Battery Logger installed and started!"
+echo "  Battery Logger installed and started!"
 echo ""
 echo "Useful commands:"
 echo "  make status    - Check service status"
