@@ -8,7 +8,7 @@
 *A lightweight Go daemon for battery monitoring, logging, and real-time visualization on Linux.*
 
 <div align="center">
-	<img src="assets/battery-logger-tui-v5-screenshot.png" alt="Battery Logger TUI Screenshot" width="480" />
+	<img src="assets/battery-logger-tui-v6-screenshot.png" alt="Battery Logger TUI Screenshot" width="480" />
 </div>
 
 
