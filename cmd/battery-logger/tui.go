@@ -245,11 +245,11 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 	_, existingConfigPaths := config.GetConfigPaths()
 	var configStr string
 	if len(existingConfigPaths) == 0 {
-		configStr = "📋 Config: Using defaults (no config file found)"
+		configStr = "  Config: Using defaults (no config file found)" // nf-md-cog
 	} else if len(existingConfigPaths) == 1 {
-		configStr = fmt.Sprintf("📋 Config file: %s", existingConfigPaths[0])
+		configStr = fmt.Sprintf("  Config file: %s", existingConfigPaths[0]) // nf-md-cog
 	} else {
-		configStr = fmt.Sprintf("📋 Config files: %s (+ %d more)", existingConfigPaths[len(existingConfigPaths)-1], len(existingConfigPaths)-1)
+		configStr = fmt.Sprintf("  Config files: %s (+ %d more)", existingConfigPaths[len(existingConfigPaths)-1], len(existingConfigPaths)-1) // nf-md-cog
 	}
 
 	// Get battery cycle count
@@ -296,12 +296,12 @@ func buildStatusLines(info StatusInfo) []lineSpec {
 
 	// Header: AC status
 	acStatus := "Unplugged"
-	acIcon := "🔋"
+	acIcon := "󱐤"
 	if info.Latest.AC {
 		acStatus = "Plugged In"
-		acIcon = "🔌"
+		acIcon = ""
 	}
-	appendLine(fmt.Sprintf("%s AC Status: %s", acIcon, acStatus), cell.ColorYellow, true)
+	appendLine(fmt.Sprintf("%s  AC Status: %s", acIcon, acStatus), cell.ColorYellow, true)
 
 	// Delta since last transition
 	if !info.TransitionTime.IsZero() {
@@ -309,49 +309,54 @@ func buildStatusLines(info StatusInfo) []lineSpec {
 		if info.Latest.AC {
 			battGain := info.Latest.Batt - info.TransitionBatt
 			appendLine(
-				fmt.Sprintf("   Plugged in for %s, battery ↑ %.1f%% (start: %.1f%%)",
+				fmt.Sprintf("--    Plugged in for %s, battery ↑ %.1f%% (start: %.1f%%)",
 					formatDurationAuto(durationSince), battGain, info.TransitionBatt),
 				0, false,
 			)
 		} else {
 			battDrop := info.TransitionBatt - info.Latest.Batt
 			appendLine(
-				fmt.Sprintf("   On battery for %s (since: %s), battery ↓ %.1f%% (start: %.1f%%)",
+				fmt.Sprintf("--    On battery for %s (since: %s), battery ↓ %.1f%% (start: %.1f%%)",
 					formatDurationAuto(durationSince), info.TransitionTime.Format("Jan 2 15:04"), battDrop, info.TransitionBatt),
 				0, false,
 			)
 		}
 	}
+	if info.Latest.AC {
+		appendLine(fmt.Sprintf("--    Time to Full (%d%%): %s", info.MaxChargePercent, info.Estimate), 0, false)
+	} else {
+		appendLine(fmt.Sprintf("--    Time to Empty (0%%): %s", info.Estimate), 0, false)
+	}
 
+	// Spacer
+	appendLine("", 0, false)
+
+	// Battery status section
+	appendLine("󰤁  Battery Status:", 0, false)
 	// Current battery & cycles
-	appendLine(fmt.Sprintf("🔋 Current Battery: %.1f%%", info.Latest.Batt), 0, false)
+	appendLine(fmt.Sprintf("--    Current Battery: %.1f%%", info.Latest.Batt), 0, false)
 	if info.HasCycleCount {
-		appendLine(fmt.Sprintf("🔄 Battery Cycles: %d", info.CycleCount), 0, false)
+		appendLine(fmt.Sprintf("--    Battery Cycles: %d", info.CycleCount), 0, false)
 	}
 
 	// Rate + estimate
-	appendLine(fmt.Sprintf("📈 %s: %s %s", info.RateLabel, info.SlopeStr, info.Confidence), 0, false)
-	if info.Latest.AC {
-		appendLine(fmt.Sprintf("⏱️  Time to Full (%d%%): %s", info.MaxChargePercent, info.Estimate), 0, false)
-	} else {
-		appendLine(fmt.Sprintf("⏱️  Time to Empty (0%%): %s", info.Estimate), 0, false)
-	}
+	appendLine(fmt.Sprintf("--    %s: %s %s", info.RateLabel, info.SlopeStr, info.Confidence), 0, false)
 
 	// Spacer
 	appendLine("", 0, false)
 
 	// Summary section
-	appendLine("📊 Data Summary:", 0, false)
-	appendLine(fmt.Sprintf("   Total samples: %d (spanning %s)", info.TotalSamples, formatDurationAuto(info.TimeRange.Round(time.Minute))), 0, false)
-	appendLine(fmt.Sprintf("   AC plugged: %d samples", info.ACSamples), cell.ColorGreen, true)
-	appendLine(fmt.Sprintf("   On battery: %d samples", info.BattSamples), cell.ColorRed, true)
-	appendLine(fmt.Sprintf("   Time range: %s to %s", info.StartTime, info.EndTime), 0, false)
+	appendLine("  Data Summary:", 0, false)
+	appendLine(fmt.Sprintf("--    Total samples: %d (spanning %s)", info.TotalSamples, formatDurationAuto(info.TimeRange.Round(time.Minute))), 0, false)
+	appendLine(fmt.Sprintf("--    AC plugged: %d samples", info.ACSamples), cell.ColorGreen, true)
+	appendLine(fmt.Sprintf("--    On battery: %d samples", info.BattSamples), cell.ColorRed, true)
+	appendLine(fmt.Sprintf("--    Time range: %s to %s", info.StartTime, info.EndTime), 0, false)
 
 	// Spacer
 	appendLine("", 0, false)
 
 	// Paths & config
-	appendLine(fmt.Sprintf("📄 Data file: %s", info.LogPath), 0, false)
+	appendLine(fmt.Sprintf("  Data file: %s", info.LogPath), 0, false)
 	appendLine(info.ConfigStr, 0, false)
 
 	return lines
