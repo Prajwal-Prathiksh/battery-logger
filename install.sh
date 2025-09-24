@@ -8,16 +8,13 @@ echo "  Installing Battery Logger..."
 # Build and install
 make setup
 make desktop-icon
+make copy-config
 
 echo "  Battery Logger installed and started!"
 echo ""
-echo "Useful commands:"
-echo "  make status    - Check service status"
-echo "  make logs      - View logs"
-echo "  make stop      - Stop service"
-echo "  make start     - Start service"
-echo "  make uninstall - Remove everything"
+echo "  Data file: ~/.local/state/battery-logger/battery.csv"
+echo "  Binary: ~/.local/bin/battery-logger"
+echo "  Application: ~/.local/share/applications/battery-logger.desktop"
+echo "  Config file: ~/.config/battery-logger/config.toml"
 echo ""
-echo "Log file: ~/.local/state/battery-logger/battery.csv"
-echo "Binary: ~/.local/bin/battery-logger"
-echo "Desktop icon: ~/.local/share/applications/battery-logger.desktop"
+echo "You can edit the config file to change settings."

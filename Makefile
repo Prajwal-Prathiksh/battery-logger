@@ -84,3 +84,8 @@ desktop-icon:
 		-e 's|@ICONDIR@|$(HOME)/.local/share/icons|g' \
 		battery-logger.desktop.in > $(HOME)/.local/share/applications/battery-logger.desktop
 
+# Copy default config to user's config directory (skip if exists)
+copy-config:
+	mkdir -p $(HOME)/.config/battery-logger
+	[ -f $(HOME)/.config/battery-logger/config.toml ] || cp internal/config/config.toml $(HOME)/.config/battery-logger/config.toml
+
