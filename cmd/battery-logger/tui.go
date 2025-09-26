@@ -60,6 +60,8 @@ type StatusInfo struct {
 	SlopeStr         string
 	Confidence       string
 	Estimate         string
+	EstimateDuration time.Duration
+	EstimateETA      time.Time
 	TotalSamples     int
 	ACSamples        int
 	BattSamples      int
@@ -187,6 +189,8 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 	var slopeStr string
 	var confidence string
 	var rateLabel string
+	var estimateDuration time.Duration
+	var estimateETA time.Time
 
 	if len(contiguousSamples) >= 2 {
 		rate, estimateMins, conf, ok := analytics.CalculateRateAndEstimate(contiguousSamples, latest.Batt, alpha, cfg.MaxChargePercent)
@@ -199,6 +203,8 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 			}
 			dur := time.Duration(estimateMins * float64(time.Minute)).Round(time.Minute)
 			est = formatDurationAuto(dur)
+			estimateDuration = dur
+			estimateETA = time.Now().Add(dur).Round(time.Minute)
 			slopeStr = fmt.Sprintf("%.3f %%/min", rate)
 		} else {
 			if currentACState {
@@ -263,6 +269,8 @@ func generateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 		SlopeStr:         slopeStr,
 		Confidence:       confidence,
 		Estimate:         est,
+		EstimateDuration: estimateDuration,
+		EstimateETA:      estimateETA,
 		TotalSamples:     totalSamples,
 		ACSamples:        acSamples,
 		BattSamples:      battSamples,
@@ -323,9 +331,18 @@ func buildStatusLines(info StatusInfo) []lineSpec {
 		}
 	}
 	if info.Latest.AC {
-		appendLine(fmt.Sprintf("--    Time to Full (%d%%): %s", info.MaxChargePercent, info.Estimate), 0, false)
+		// If we have an estimate duration, also show the ETA (by: time)
+		if info.EstimateDuration > 0 {
+			appendLine(fmt.Sprintf("--    Time to Full (%d%%): %s (by: %s)", info.MaxChargePercent, info.Estimate, info.EstimateETA.Format("15:04")), 0, false)
+		} else {
+			appendLine(fmt.Sprintf("--    Time to Full (%d%%): %s", info.MaxChargePercent, info.Estimate), 0, false)
+		}
 	} else {
-		appendLine(fmt.Sprintf("--    Time to Empty (0%%): %s", info.Estimate), 0, false)
+		if info.EstimateDuration > 0 {
+			appendLine(fmt.Sprintf("--    Time to Empty (0%%): %s (by: %s)", info.Estimate, info.EstimateETA.Format("15:04")), 0, false)
+		} else {
+			appendLine(fmt.Sprintf("--    Time to Empty (0%%): %s", info.Estimate), 0, false)
+		}
 	}
 
 	// Spacer
