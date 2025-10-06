@@ -7,7 +7,7 @@ SERVICEDIR = $(HOME)/.config/systemd/user
 BINARY_NAME = battery-logger
 SERVICE_NAME = battery-logger.service
 
-.PHONY: help build clean copy-config desktop-icon install install-service logs start status stop uninstall
+.PHONY: help build clean copy-config desktop-icon install install-service logs setup start status stop uninstall
 
 # Show help
 help:
@@ -19,6 +19,7 @@ help:
 	@echo "  install          - Install binary to ~/.local/bin"
 	@echo "  install-service  - Install and enable systemd service"
 	@echo "  logs             - Follow service logs"
+	@echo "  setup            - One step setup (install, install-service, desktop-icon, copy-config and start)"
 	@echo "  start            - Start the service"
 	@echo "  status           - Show service status"
 	@echo "  stop             - Stop the service"
@@ -63,6 +64,9 @@ install-service: install
 # View logs
 logs:
 	journalctl --user -u $(SERVICE_NAME) -f
+
+# One step setup
+setup: install install-service desktop-icon copy-config start
 
 # Start the service
 start: install-service
