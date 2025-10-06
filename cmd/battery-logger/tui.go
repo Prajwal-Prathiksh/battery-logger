@@ -86,6 +86,7 @@ func createChartWidget(cfg config.Config) *widgets.BatteryChart {
 			cell.ColorNumber(cfg.DayColorNumber),   // Day color from config
 			cell.ColorNumber(cfg.NightColorNumber), // Night color from config
 		),
+		widgets.MaxWindow(time.Duration(cfg.MaxWindowZoom)*24*time.Hour), // Maximum zoom window from config
 	)
 }
 
