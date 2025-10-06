@@ -23,6 +23,7 @@ type Config struct {
 	NightColorNumber int    `toml:"night_color_number"`
 	DayStartHour     int    `toml:"day_start_hour"`
 	DayEndHour       int    `toml:"day_end_hour"`
+	MaxWindowZoom    int    `toml:"max_window_zoom"` // Maximum zoom window in days
 }
 
 func Defaults() Config {
@@ -39,6 +40,7 @@ func Defaults() Config {
 		NightColorNumber: 0,   // True black for night
 		DayStartHour:     7,   // 7 AM
 		DayEndHour:       19,  // 7 PM
+		MaxWindowZoom:    10,  // Maximum zoom window in days
 	}
 }
 
@@ -180,6 +182,10 @@ func loadConfigFile(path string, cfg *Config) error {
 		case "day_end_hour":
 			if val, err := strconv.Atoi(value); err == nil {
 				cfg.DayEndHour = val
+			}
+		case "max_window_zoom":
+			if val, err := strconv.Atoi(value); err == nil {
+				cfg.MaxWindowZoom = val
 			}
 		}
 	}

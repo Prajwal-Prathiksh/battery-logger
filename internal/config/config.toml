@@ -12,3 +12,6 @@ day_color_number = -1     # Default terminal foreground color for day
 night_color_number = 234  # Very dark gray for night
 day_start_hour = 7        # 7 AM - when day starts
 day_end_hour = 19         # 7 PM - when night starts
+
+# Zoom settings
+max_window_zoom = 10      # Maximum zoom window in days
