@@ -63,7 +63,7 @@ type BatteryChart struct {
 	// Zoom parameters
 	zoomStep  float64       // zoom step percentage (0.1 = 10%)
 	minWindow time.Duration // minimum zoom window (5m)
-	maxWindow time.Duration // maximum zoom window (7d)
+	maxWindow time.Duration // maximum zoom window (10d)
 
 	// Data bounds for limiting pan operations
 	dataStart time.Time // earliest data point
@@ -105,9 +105,9 @@ func CreateBatteryChart(opts ...BatteryChartOption) *BatteryChart {
 		dateThreshold: 0, // Always show dates regardless of window size
 
 		// Zoom parameters
-		zoomStep:  0.1,                // 10% zoom steps
-		minWindow: 5 * time.Minute,    // minimum 5 minutes
-		maxWindow: 7 * 24 * time.Hour, // maximum 7 days
+		zoomStep:  0.1,                 // 10% zoom steps
+		minWindow: 5 * time.Minute,     // minimum 5 minutes
+		maxWindow: 10 * 24 * time.Hour, // maximum 10 days
 	}
 
 	// Initialize current view to the base window
@@ -160,6 +160,12 @@ func DayHours(start, end int) BatteryChartOption {
 	return batteryChartOption(func(tc *BatteryChart) {
 		tc.dayStart = start
 		tc.dayEnd = end
+	})
+}
+
+func MaxWindow(d time.Duration) BatteryChartOption {
+	return batteryChartOption(func(tc *BatteryChart) {
+		tc.maxWindow = d
 	})
 }
 
@@ -638,10 +644,10 @@ func (tc *BatteryChart) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventM
 		return tc.pan(true)
 	case 'i', 'I':
 		// Zoom in (reduce window size)
-		return tc.zoom(true, image.Point{})
+		return tc.zoom(true)
 	case 'o', 'O':
 		// Zoom out (increase window size)
-		return tc.zoom(false, image.Point{})
+		return tc.zoom(false)
 	case keyboard.KeyEsc:
 		// Reset zoom to base window
 		tc.currentWindow = tc.baseWindow
@@ -659,10 +665,10 @@ func (tc *BatteryChart) Mouse(m *terminalapi.Mouse, meta *widgetapi.EventMeta) e
 	switch m.Button {
 	case mouse.ButtonWheelUp:
 		// Zoom in (reduce window size)
-		return tc.zoom(true, m.Position)
+		return tc.zoom(true)
 	case mouse.ButtonWheelDown:
 		// Zoom out (increase window size)
-		return tc.zoom(false, m.Position)
+		return tc.zoom(false)
 	case mouse.ButtonLeft:
 		// Start drag selection
 		tc.isDragging = true
@@ -693,7 +699,7 @@ func (tc *BatteryChart) Options() widgetapi.Options {
 }
 
 // zoom handles mouse wheel zoom in/out
-func (tc *BatteryChart) zoom(zoomIn bool, position image.Point) error {
+func (tc *BatteryChart) zoom(zoomIn bool) error {
 	if zoomIn {
 		// Zoom in: reduce window size
 		newWindow := time.Duration(float64(tc.currentWindow) * (1.0 - tc.zoomStep))
