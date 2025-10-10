@@ -152,10 +152,26 @@ func ParseCSVRows(rows [][]string) ([]Row, error) {
 		return nil, errors.New("empty csv")
 	}
 
-	// Find columns by header name (flexible: case-insensitive, allow spaces)
+	tsIdx, acIdx, battIdx, err := findColumns(rows[0])
+	if err != nil {
+		return nil, err
+	}
+
+	var out []Row
+	for i := 1; i < len(rows); i++ {
+		row, err := parseCSVRow(rows[i], tsIdx, acIdx, battIdx)
+		if err != nil {
+			continue
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
+func findColumns(header []string) (tsIdx, acIdx, battIdx int, err error) {
 	col := func(name string) int {
 		name = strings.ToLower(strings.TrimSpace(name))
-		for i, h := range rows[0] {
+		for i, h := range header {
 			if strings.ToLower(strings.TrimSpace(h)) == name {
 				return i
 			}
@@ -163,8 +179,8 @@ func ParseCSVRows(rows [][]string) ([]Row, error) {
 		return -1
 	}
 
-	tsIdx := col("timestamp")
-	acIdx := col("ac_connected")
+	tsIdx = col("timestamp")
+	acIdx = col("ac_connected")
 	if acIdx == -1 {
 		acIdx = col("ac")
 	}
@@ -174,7 +190,7 @@ func ParseCSVRows(rows [][]string) ([]Row, error) {
 	if acIdx == -1 {
 		acIdx = col("ac plugged in")
 	}
-	battIdx := col("battery_life")
+	battIdx = col("battery_life")
 	if battIdx == -1 {
 		battIdx = col("battery")
 	}
@@ -183,50 +199,51 @@ func ParseCSVRows(rows [][]string) ([]Row, error) {
 	}
 
 	if tsIdx == -1 || acIdx == -1 || battIdx == -1 {
-		return nil, fmt.Errorf("expected headers: timestamp, ac_connected, battery_life (or similar)")
+		return -1, -1, -1, fmt.Errorf("expected headers: timestamp, ac_connected, battery_life (or similar)")
+	}
+	return tsIdx, acIdx, battIdx, nil
+}
+
+func parseCSVRow(rec []string, tsIdx, acIdx, battIdx int) (Row, error) {
+	if len(rec) <= battIdx || len(rec) <= tsIdx || len(rec) <= acIdx {
+		return Row{}, fmt.Errorf("insufficient columns")
 	}
 
-	var out []Row
-	for i := 1; i < len(rows); i++ {
-		rec := rows[i]
-		if len(rec) <= battIdx || len(rec) <= tsIdx || len(rec) <= acIdx {
-			continue
-		}
-
-		t, err := time.Parse(time.RFC3339, strings.TrimSpace(rec[tsIdx]))
-		if err != nil {
-			// Try some common fallback formats if needed
-			layouts := []string{
-				"2006-01-02 15:04:05",
-				"2006-01-02 15:04:05 -0700",
-				"2006-01-02T15:04:05",
-			}
-			ok := false
-			for _, lay := range layouts {
-				if tt, e2 := time.Parse(lay, strings.TrimSpace(rec[tsIdx])); e2 == nil {
-					t = tt
-					ok = true
-					break
-				}
-			}
-			if !ok {
-				continue
-			}
-		}
-
-		ac, err := ParseBoolLoose(rec[acIdx])
-		if err != nil {
-			continue
-		}
-
-		b, err := strconv.ParseFloat(strings.TrimSpace(rec[battIdx]), 64)
-		if err != nil {
-			continue
-		}
-
-		out = append(out, Row{T: t, AC: ac, Batt: b})
+	t, err := parseTimestamp(strings.TrimSpace(rec[tsIdx]))
+	if err != nil {
+		return Row{}, err
 	}
-	return out, nil
+
+	ac, err := ParseBoolLoose(rec[acIdx])
+	if err != nil {
+		return Row{}, err
+	}
+
+	b, err := strconv.ParseFloat(strings.TrimSpace(rec[battIdx]), 64)
+	if err != nil {
+		return Row{}, err
+	}
+
+	return Row{T: t, AC: ac, Batt: b}, nil
+}
+
+func parseTimestamp(tsStr string) (time.Time, error) {
+	t, err := time.Parse(time.RFC3339, tsStr)
+	if err == nil {
+		return t, nil
+	}
+
+	layouts := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04:05 -0700",
+		"2006-01-02T15:04:05",
+	}
+	for _, lay := range layouts {
+		if tt, e2 := time.Parse(lay, tsStr); e2 == nil {
+			return tt, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unable to parse timestamp")
 }
 
 // SuspendEvent represents a detected suspend/shutdown period
