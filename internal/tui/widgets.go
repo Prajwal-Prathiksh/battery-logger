@@ -54,7 +54,7 @@ func CreateUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, t
 				container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
 				container.PlaceWidget(textWidget),
 			),
-			container.SplitPercent(70),
+			container.SplitPercent(60),
 		),
 	)
 }
