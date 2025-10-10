@@ -13,11 +13,12 @@ import (
 	"github.com/mum4k/termdash/cell"
 	"github.com/mum4k/termdash/container"
 	"github.com/mum4k/termdash/terminal/terminalapi"
+	"github.com/mum4k/termdash/widgets/barchart"
 	"github.com/mum4k/termdash/widgets/text"
 )
 
 // SetupDataRefresh sets up periodic data refresh and returns the update function
-func SetupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.BatteryChart, textWidget *text.Text, cfg config.Config, c *container.Container, alpha float64, readCSVFunc func(string) ([]analytics.Row, error)) (func() error, error) {
+func SetupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, chartWidget *widgets.BatteryChart, textWidget *text.Text, sotBarChart *barchart.BarChart, cfg config.Config, c *container.Container, alpha float64, readCSVFunc func(string) ([]analytics.Row, error)) (func() error, error) {
 	updateData := func() error {
 		rows, err := readCSVFunc(logPath)
 		if err != nil || len(rows) == 0 {
@@ -50,6 +51,11 @@ func SetupDataRefresh(ctx context.Context, logPath string, uiParams *UIParams, c
 		// Generate and update status text
 		statusInfo := GenerateStatusInfo(rows, alpha, uiParams, logPath, cfg)
 		UpdateStatusText(textWidget, statusInfo)
+
+		// Update SOT bar chart
+		if err := UpdateSOTBarChart(sotBarChart, rows, cfg.SuspendGapMinutes); err != nil {
+			return fmt.Errorf("updating SOT bar chart: %v", err)
+		}
 
 		return nil
 	}

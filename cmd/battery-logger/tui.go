@@ -47,11 +47,16 @@ func runTUI() {
 		log.Fatalf("CreateTextWidget => %v", err)
 	}
 
+	sotBarChart, err := tui.CreateSOTBarChart()
+	if err != nil {
+		log.Fatalf("CreateSOTBarChart => %v", err)
+	}
+
 	// Data update function (declared here so it can be used in callbacks)
 	var updateData func() error
 
 	// Set up the container with layout
-	c, err := tui.CreateUILayout(t, chartWidget, textWidget)
+	c, err := tui.CreateUILayout(t, chartWidget, textWidget, sotBarChart)
 	if err != nil {
 		log.Fatalf("CreateUILayout => %v", err)
 	}
@@ -65,7 +70,7 @@ func runTUI() {
 	defer cancel()
 
 	// Set up data refresh and get the update function
-	updateData, err = tui.SetupDataRefresh(ctx, logPath, uiParams, chartWidget, textWidget, cfg, c, alpha, readCSV)
+	updateData, err = tui.SetupDataRefresh(ctx, logPath, uiParams, chartWidget, textWidget, sotBarChart, cfg, c, alpha, readCSV)
 	if err != nil {
 		log.Fatalf("SetupDataRefresh => %v", err)
 	}

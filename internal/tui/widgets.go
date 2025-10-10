@@ -11,6 +11,7 @@ import (
 	"github.com/mum4k/termdash/keyboard"
 	"github.com/mum4k/termdash/linestyle"
 	"github.com/mum4k/termdash/terminal/terminalapi"
+	"github.com/mum4k/termdash/widgets/barchart"
 	"github.com/mum4k/termdash/widgets/text"
 )
 
@@ -34,8 +35,33 @@ func CreateTextWidget() (*text.Text, error) {
 	return text.New(text.WrapAtWords())
 }
 
+// CreateSOTBarChart creates and configures the daily SOT bar chart widget
+func CreateSOTBarChart() (*barchart.BarChart, error) {
+	return barchart.New(
+		barchart.ShowValues(), // Show raw minute values
+		barchart.BarColors([]cell.Color{
+			cell.ColorCyan,
+			cell.ColorCyan,
+			cell.ColorCyan,
+			cell.ColorCyan,
+			cell.ColorCyan,
+			cell.ColorCyan,
+			cell.ColorYellow, // Today in different color
+		}),
+		barchart.ValueColors([]cell.Color{
+			cell.ColorWhite,
+			cell.ColorWhite,
+			cell.ColorWhite,
+			cell.ColorWhite,
+			cell.ColorWhite,
+			cell.ColorWhite,
+			cell.ColorBlack, // Today values in black for contrast
+		}),
+	)
+}
+
 // CreateUILayout creates the TUI container layout with all widgets
-func CreateUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, textWidget *text.Text) (*container.Container, error) {
+func CreateUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, textWidget *text.Text, sotBarChart *barchart.BarChart) (*container.Container, error) {
 	return container.New(
 		t,
 		container.Border(linestyle.Light),
@@ -50,9 +76,19 @@ func CreateUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, t
 				container.PlaceWidget(chartWidget),
 			),
 			container.Bottom(
-				container.Border(linestyle.Light),
-				container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
-				container.PlaceWidget(textWidget),
+				container.SplitVertical(
+					container.Left(
+						container.Border(linestyle.Light),
+						container.BorderTitle("Battery Status & Prediction - ↑↓ to scroll"),
+						container.PlaceWidget(textWidget),
+					),
+					container.Right(
+						container.Border(linestyle.Light),
+						container.BorderTitle("Daily Screen-On Time (7 days)"),
+						container.PlaceWidget(sotBarChart),
+					),
+					container.SplitPercent(65), // Status text takes 65%, bar chart takes 35%
+				),
 			),
 			container.SplitPercent(60),
 		),

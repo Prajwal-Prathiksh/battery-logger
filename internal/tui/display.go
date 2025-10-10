@@ -5,7 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
+
 	"github.com/mum4k/termdash/cell"
+	"github.com/mum4k/termdash/widgets/barchart"
 	"github.com/mum4k/termdash/widgets/text"
 )
 
@@ -162,4 +165,90 @@ func UpdateStatusText(textWidget *text.Text, info StatusInfo) {
 			textWidget.Write(ln.Text + "\n")
 		}
 	}
+}
+
+// DailySOTData represents screen-on time data for a single day
+type DailySOTData struct {
+	Date     time.Time
+	SOTHours float64
+	IsToday  bool
+	HasData  bool
+}
+
+// CalculateWeeklySOTData calculates daily SOT for the past 7 days
+func CalculateWeeklySOTData(rows []analytics.Row, gapThresholdMinutes int) []DailySOTData {
+	now := time.Now()
+	var weekData []DailySOTData
+
+	// Calculate for the past 7 days (including today)
+	for i := 6; i >= 0; i-- {
+		date := now.AddDate(0, 0, -i)
+		sotResult := analytics.CalculateDailyScreenOnTime(rows, date, gapThresholdMinutes)
+
+		weekData = append(weekData, DailySOTData{
+			Date:     date,
+			SOTHours: sotResult.TotalActiveTime.Hours(),
+			IsToday:  i == 0,
+			HasData:  sotResult.TotalActiveTime > 0,
+		})
+	}
+
+	return weekData
+}
+
+// UpdateSOTBarChart updates the daily SOT bar chart with new data
+func UpdateSOTBarChart(barChart *barchart.BarChart, rows []analytics.Row, gapThresholdMinutes int) error {
+	weekData := CalculateWeeklySOTData(rows, gapThresholdMinutes)
+
+	var values []int
+	var labels []string
+	var maxMinutes int = 60 // Minimum scale: 1 hour
+
+	// Prepare data for bar chart
+	for _, day := range weekData {
+		// Convert hours to minutes for integer values
+		sotMinutes := int(day.SOTHours * 60)
+		values = append(values, sotMinutes)
+
+		// Track max for scaling
+		if sotMinutes > maxMinutes {
+			maxMinutes = sotMinutes
+		}
+
+		// Create labels with day abbreviation
+		dayLabel := day.Date.Format("Mon")
+		if day.IsToday {
+			dayLabel = "Today"
+		}
+		labels = append(labels, dayLabel)
+	}
+
+	// If all values are zero, set a reasonable scale
+	if maxMinutes <= 60 {
+		maxMinutes = 480 // 8 hours in minutes
+	} else {
+		// Add some padding to the max scale
+		maxMinutes = int(float64(maxMinutes) * 1.1)
+	}
+
+	// Update bar chart colors - highlight today
+	var barColors []cell.Color
+	var valueColors []cell.Color
+	for _, day := range weekData {
+		if day.IsToday {
+			barColors = append(barColors, cell.ColorYellow)
+			valueColors = append(valueColors, cell.ColorBlack)
+		} else {
+			barColors = append(barColors, cell.ColorCyan)
+			valueColors = append(valueColors, cell.ColorWhite)
+		}
+	}
+
+	// Update the bar chart with raw minute values shown
+	return barChart.Values(values, maxMinutes,
+		barchart.Labels(labels),
+		barchart.BarColors(barColors),
+		barchart.ValueColors(valueColors),
+		barchart.ShowValues(), // Show raw minute values
+	)
 }
