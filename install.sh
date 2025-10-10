@@ -10,7 +10,6 @@ make setup
 
 echo "  Battery Zen installed and started!"
 echo ""
-echo "  Data file: ~/.local/state/battery-zen/logs.csv"
 echo "  Binary: ~/.local/bin/battery-zen"
 echo "  Application: ~/.local/share/applications/battery-zen.desktop"
 echo "  Config file: ~/.config/battery-zen/config.toml"

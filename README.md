@@ -5,11 +5,11 @@
 
 # Battery Zen
 
-[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org/)
-[![License](https://img.shields.io/github/license/Prajwal-Prathiksh/battery-zen?style=flat)](LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![License](https://img.shields.io/github/license/Prajwal-Prathiksh/battery-zen?style=flat)](https://github.com/Prajwal-Prathiksh/battery-zen/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/v/release/Prajwal-Prathiksh/battery-zen?style=flat)](https://github.com/Prajwal-Prathiksh/battery-zen/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Prajwal-Prathiksh/battery-zen)](https://goreportcard.com/report/github.com/Prajwal-Prathiksh/battery-zen)
-[![Platform](https://img.shields.io/badge/platform-Linux-blue?style=flat&logo=linux)](https://kernel.org/)
+[![Platform](https://img.shields.io/badge/platform-Linux-blue?style=flat&logo=linux)](https://www.linux.org/)
 [![Systemd](https://img.shields.io/badge/systemd-supported-green?style=flat)](https://systemd.io/)
 
 *A zen-like Go toolkit for mindful battery monitoring, logging, and real-time visualization on Linux.*

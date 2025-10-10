@@ -15,13 +15,13 @@ The Battery Zen TUI provides real-time visualization of your battery data with i
 - `-alpha float`: Exponential decay factor for weighted regression (default: 0.05)
   - Higher values give more weight to recent data points
   - Lower values consider historical data more equally
-- **Refresh rate**: Fixed at 10 seconds.
+- **Refresh rate**: Fixed at 20 seconds.
 
 ## Features
 
 
 ### 📊 Real-time Visualization
-- **Two-pane layout**: interactive chart (70%) and status panel (30%)
+- **Three-pane layout**: interactive chart, status panel, and SOT bar chart
 - **Day/night background visualization**: configurable colors and hours
 - **Interactive time-based chart** with zoom (mouse wheel or i/o keys), pan (←→), and reset (Esc)
 - **Color-coded data series**:
@@ -29,6 +29,7 @@ The Battery Zen TUI provides real-time visualization of your battery data with i
   - 🔴 **Red line**: When running on battery
 - **Time-based X-axis** with intelligent labeling and date annotations
 - **Real-time status panel** with battery cycle count (if available)
+- **Weekly SOT bar chart** showing daily screen-on time trends
 
 ### 🧮 Smart Predictions
 - **Discharge rate calculation** using weighted linear regression
@@ -45,6 +46,9 @@ The Battery Zen TUI provides real-time visualization of your battery data with i
 - **Time span** of displayed data with start/end times
 - **Data file location** and configuration file paths
 - **Real-time discharge rate** in %/min
+- **Screen-on time (SOT) tracking** with current session and daily totals
+- **Suspend event details** including duration and battery drain during sleep
+- **Weekly SOT bar chart** showing daily screen-on time trends for the past 7 days
 
 
 ### ⌨️ Controls
