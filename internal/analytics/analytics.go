@@ -228,3 +228,106 @@ func ParseCSVRows(rows [][]string) ([]Row, error) {
 	}
 	return out, nil
 }
+
+// SuspendEvent represents a detected suspend/shutdown period
+type SuspendEvent struct {
+	StartTime     time.Time
+	EndTime       time.Time
+	Duration      time.Duration
+	BatteryBefore float64
+	BatteryAfter  float64
+	BatteryDrop   float64
+}
+
+// DetectSuspendEvents identifies periods where data logging was interrupted,
+// indicating system suspend or shutdown. Returns events in chronological order.
+func DetectSuspendEvents(rows []Row, gapThresholdMinutes int) []SuspendEvent {
+	if len(rows) < 2 {
+		return nil
+	}
+
+	var events []SuspendEvent
+	threshold := time.Duration(gapThresholdMinutes) * time.Minute
+
+	for i := 1; i < len(rows); i++ {
+		gap := rows[i].T.Sub(rows[i-1].T)
+		if gap >= threshold {
+			event := SuspendEvent{
+				StartTime:     rows[i-1].T,
+				EndTime:       rows[i].T,
+				Duration:      gap,
+				BatteryBefore: rows[i-1].Batt,
+				BatteryAfter:  rows[i].Batt,
+				BatteryDrop:   rows[i-1].Batt - rows[i].Batt,
+			}
+			events = append(events, event)
+		}
+	}
+
+	return events
+}
+
+// ScreenOnTimeResult holds screen-on time calculation results
+type ScreenOnTimeResult struct {
+	TotalActiveTime   time.Duration  // Total time with active data points
+	SuspendTime       time.Duration  // Total time in suspend/shutdown
+	LastActiveSession time.Duration  // Active time since last suspend/wake
+	SuspendEvents     []SuspendEvent // All suspend events in the period
+}
+
+// CalculateScreenOnTime calculates screen-on time by detecting gaps in data logging.
+// Active time = total time span - suspend time (gaps >= threshold).
+// This is a proxy for screen-on time since logging typically happens when system is active.
+func CalculateScreenOnTime(rows []Row, gapThresholdMinutes int) ScreenOnTimeResult {
+	result := ScreenOnTimeResult{}
+
+	if len(rows) < 2 {
+		return result
+	}
+
+	// Detect all suspend events
+	result.SuspendEvents = DetectSuspendEvents(rows, gapThresholdMinutes)
+
+	// Calculate total suspend time
+	for _, event := range result.SuspendEvents {
+		result.SuspendTime += event.Duration
+	}
+
+	// Total time span
+	totalTimeSpan := rows[len(rows)-1].T.Sub(rows[0].T)
+
+	// Active time = total span - suspend time
+	result.TotalActiveTime = totalTimeSpan - result.SuspendTime
+
+	// Calculate time since last suspend/wake (current active session)
+	if len(result.SuspendEvents) > 0 {
+		lastSuspendEnd := result.SuspendEvents[len(result.SuspendEvents)-1].EndTime
+		result.LastActiveSession = rows[len(rows)-1].T.Sub(lastSuspendEnd)
+	} else {
+		// No suspends detected, entire period is one session
+		result.LastActiveSession = result.TotalActiveTime
+	}
+
+	return result
+}
+
+// CalculateDailyScreenOnTime calculates screen-on time for a specific day.
+// Returns active time and suspend events for that day only.
+func CalculateDailyScreenOnTime(rows []Row, targetDate time.Time, gapThresholdMinutes int) ScreenOnTimeResult {
+	// Filter rows to only include the target date
+	startOfDay := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 0, 0, 0, 0, targetDate.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	var dayRows []Row
+	for _, row := range rows {
+		if row.T.After(startOfDay) && row.T.Before(endOfDay) {
+			dayRows = append(dayRows, row)
+		}
+	}
+
+	if len(dayRows) == 0 {
+		return ScreenOnTimeResult{}
+	}
+
+	return CalculateScreenOnTime(dayRows, gapThresholdMinutes)
+}

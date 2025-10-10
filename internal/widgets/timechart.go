@@ -694,7 +694,7 @@ func (tc *BatteryChart) Mouse(m *terminalapi.Mouse, meta *widgetapi.EventMeta) e
 func (tc *BatteryChart) Options() widgetapi.Options {
 	return widgetapi.Options{
 		WantKeyboard: widgetapi.KeyScopeGlobal,
-		WantMouse:    widgetapi.MouseScopeGlobal,
+		WantMouse:    widgetapi.MouseScopeWidget,
 	}
 }
 

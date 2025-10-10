@@ -11,36 +11,38 @@ import (
 )
 
 type Config struct {
-	IntervalSecs     int    `toml:"interval_secs"`
-	IntervalSecsOnAC int    `toml:"interval_secs_on_ac"`
-	Timezone         string `toml:"timezone"` // "UTC" or "Local"
-	LogDir           string `toml:"log_dir"`
-	LogFile          string `toml:"log_file"`
-	MaxLines         int    `toml:"max_lines"`
-	TrimBuffer       int    `toml:"trim_buffer"`
-	MaxChargePercent int    `toml:"max_charge_percent"`
-	DayColorNumber   int    `toml:"day_color_number"`
-	NightColorNumber int    `toml:"night_color_number"`
-	DayStartHour     int    `toml:"day_start_hour"`
-	DayEndHour       int    `toml:"day_end_hour"`
-	MaxWindowZoom    int    `toml:"max_window_zoom"` // Maximum zoom window in days
+	IntervalSecs      int    `toml:"interval_secs"`
+	IntervalSecsOnAC  int    `toml:"interval_secs_on_ac"`
+	Timezone          string `toml:"timezone"` // "UTC" or "Local"
+	LogDir            string `toml:"log_dir"`
+	LogFile           string `toml:"log_file"`
+	MaxLines          int    `toml:"max_lines"`
+	TrimBuffer        int    `toml:"trim_buffer"`
+	MaxChargePercent  int    `toml:"max_charge_percent"`
+	DayColorNumber    int    `toml:"day_color_number"`
+	NightColorNumber  int    `toml:"night_color_number"`
+	DayStartHour      int    `toml:"day_start_hour"`
+	DayEndHour        int    `toml:"day_end_hour"`
+	MaxWindowZoom     int    `toml:"max_window_zoom"`     // Maximum zoom window in days
+	SuspendGapMinutes int    `toml:"suspend_gap_minutes"` // Consider gaps >= this as suspend/shutdown
 }
 
 func Defaults() Config {
 	return Config{
-		IntervalSecs:     60,
-		IntervalSecsOnAC: 300,
-		Timezone:         "Local",
-		LogDir:           filepath.Join(xdgStateHome(), "battery-logger"),
-		LogFile:          "battery.csv",
-		MaxLines:         1000,
-		TrimBuffer:       100,
-		MaxChargePercent: 100,
-		DayColorNumber:   237, // Dark gray for day
-		NightColorNumber: 0,   // True black for night
-		DayStartHour:     7,   // 7 AM
-		DayEndHour:       19,  // 7 PM
-		MaxWindowZoom:    10,  // Maximum zoom window in days
+		IntervalSecs:      60,
+		IntervalSecsOnAC:  300,
+		Timezone:          "Local",
+		LogDir:            filepath.Join(xdgStateHome(), "battery-logger"),
+		LogFile:           "battery.csv",
+		MaxLines:          4000,
+		TrimBuffer:        100,
+		MaxChargePercent:  100,
+		DayColorNumber:    237, // Dark gray for day
+		NightColorNumber:  0,   // True black for night
+		DayStartHour:      7,   // 7 AM
+		DayEndHour:        19,  // 7 PM
+		MaxWindowZoom:     10,  // Maximum zoom window in days
+		SuspendGapMinutes: 5,   // Default 5 minutes gap detection
 	}
 }
 
@@ -186,6 +188,10 @@ func loadConfigFile(path string, cfg *Config) error {
 		case "max_window_zoom":
 			if val, err := strconv.Atoi(value); err == nil {
 				cfg.MaxWindowZoom = val
+			}
+		case "suspend_gap_minutes":
+			if val, err := strconv.Atoi(value); err == nil {
+				cfg.SuspendGapMinutes = val
 			}
 		}
 	}
