@@ -119,7 +119,7 @@ All configuration options available in config files:
 - `timezone = "Local"` - Timezone for timestamps
 - `log_dir = "~/.local/state/battery-logger"` - Directory for log files
 - `log_file = "battery.csv"` - Name of the CSV log file
-- `max_lines = 2000` - Maximum lines in log before rotation
+- `max_lines = 4000` - Maximum lines in log before rotation
 - `trim_buffer = 100` - Lines to keep when trimming log
 - `max_charge_percent = 100` - Maximum charge threshold for predictions
 - `suspend_gap_minutes = 5` - Gap threshold for detecting suspend/shutdown events

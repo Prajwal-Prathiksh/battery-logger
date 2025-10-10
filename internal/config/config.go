@@ -34,7 +34,7 @@ func Defaults() Config {
 		Timezone:          "Local",
 		LogDir:            filepath.Join(xdgStateHome(), "battery-logger"),
 		LogFile:           "battery.csv",
-		MaxLines:          1000,
+		MaxLines:          4000,
 		TrimBuffer:        100,
 		MaxChargePercent:  100,
 		DayColorNumber:    237, // Dark gray for day
