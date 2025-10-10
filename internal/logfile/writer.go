@@ -125,6 +125,26 @@ func tailLastLines(f *os.File, n int) ([]string, error) {
 	if size == 0 {
 		return nil, nil
 	}
+
+	lines, err := readLinesBackward(f, size, n)
+	if err != nil {
+		return nil, err
+	}
+
+	// Reverse to chronological order
+	reverseStrings(lines)
+
+	// Ensure trailing newline on each
+	for i := range lines {
+		if !strings.HasSuffix(lines[i], "\n") {
+			lines[i] += "\n"
+		}
+	}
+
+	return lines, nil
+}
+
+func readLinesBackward(f *os.File, size int64, n int) ([]string, error) {
 	const chunk = 8192
 	var (
 		buf   []byte
@@ -132,54 +152,54 @@ func tailLastLines(f *os.File, n int) ([]string, error) {
 		lines []string
 	)
 
-	// Read backwards collecting lines
 	partial := []byte{}
 	for pos > 0 && len(lines) <= n {
-		readSize := int64(chunk)
-		if pos < readSize {
-			readSize = pos
+		readSize := pos
+		if readSize > chunk {
+			readSize = chunk
 		}
 		pos -= readSize
-		_, err := f.Seek(pos, io.SeekStart)
-		if err != nil {
+
+		if _, err := f.Seek(pos, io.SeekStart); err != nil {
 			return nil, err
 		}
+
 		tmp := make([]byte, readSize)
 		if _, err := io.ReadFull(f, tmp); err != nil {
 			return nil, err
 		}
+
 		buf = append(tmp, partial...)
-		// Split by newline from the end
-		for i := len(buf) - 1; i >= 0; i-- {
-			if buf[i] == '\n' {
-				line := string(buf[i+1:])
-				if line != "" {
-					lines = append(lines, line)
-				}
-				buf = buf[:i]
-			}
-			if len(lines) >= n {
-				break
-			}
-		}
-		partial = append([]byte{}, buf...)
+		lines, buf = extractLinesFromEnd(buf, lines, n)
+		partial = buf
 		buf = buf[:0]
 	}
-	// If we still need one more and partial has data (first line)
+
+	// Handle remaining partial line
 	if len(lines) < n && len(partial) > 0 {
 		lines = append(lines, string(partial))
 	}
-	// We built from end to start; reverse to chronological
-	for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
-		lines[i], lines[j] = lines[j], lines[i]
-	}
-	// Ensure trailing newline on each
-	for i := range lines {
-		if !strings.HasSuffix(lines[i], "\n") {
-			lines[i] += "\n"
+
+	return lines, nil
+}
+
+func extractLinesFromEnd(buf []byte, lines []string, n int) ([]string, []byte) {
+	for i := len(buf) - 1; i >= 0 && len(lines) < n; i-- {
+		if buf[i] == '\n' {
+			line := string(buf[i+1:])
+			if line != "" {
+				lines = append(lines, line)
+			}
+			buf = buf[:i]
 		}
 	}
-	return lines, nil
+	return lines, buf
+}
+
+func reverseStrings(s []string) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
 }
 
 func EnsureDir(path string) error {
