@@ -1,6 +1,6 @@
 
 <div align="center">
--lo	<img src="assets/battery-zen.png" alt="Battery Zen Logo" width="120" />
+	<img src="assets/battery-zen.png" alt="Battery Zen Logo" width="120" />
 </div>
 
 # Battery Zen
