@@ -110,20 +110,8 @@ func (bc *SOTBarChart) formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", hours, minutes)
 }
 
-// Draw implements widgetapi.Widget.Draw
-func (bc *SOTBarChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
-	area := cvs.Area()
-	if area.Dx() < 10 || area.Dy() < 5 {
-		return draw.ResizeNeeded(cvs)
-	}
-
-	// Clear canvas
-	cvs.Clear()
-
-	if len(bc.data) == 0 {
-		return draw.Text(cvs, "No SOT data", image.Point{1, 1})
-	}
-
+// calculateBarDimensions calculates bar width, spacing, and drawing area
+func (bc *SOTBarChart) calculateBarDimensions(area image.Rectangle) (int, int, image.Rectangle) {
 	// Calculate drawing areas within the provided canvas area
 	// Leave space for time labels above bars and day labels below
 	topLabelHeight := 1
@@ -136,10 +124,6 @@ func (bc *SOTBarChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 		area.Max.X,
 		area.Max.Y-bottomLabelHeight, // Space for day labels below
 	)
-
-	if barArea.Dy() < 1 {
-		return draw.ResizeNeeded(cvs)
-	}
 
 	// Calculate bar dimensions with proper spacing
 	numBars := len(bc.data)
@@ -156,7 +140,11 @@ func (bc *SOTBarChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 		barSpacing = 0 // No spacing if bars are too narrow
 	}
 
-	// Find max duration for scaling
+	return barWidth, barSpacing, barArea
+}
+
+// findMaxDuration finds the maximum SOT duration for scaling
+func (bc *SOTBarChart) findMaxDuration() time.Duration {
 	var maxDuration time.Duration
 	for _, data := range bc.data {
 		if data.SOTDuration > maxDuration {
@@ -168,12 +156,86 @@ func (bc *SOTBarChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 	if maxDuration < time.Hour {
 		maxDuration = time.Hour
 	}
+	return maxDuration
+}
+
+// drawBar draws a single bar on the canvas
+func (bc *SOTBarChart) drawBar(cvs *canvas.Canvas, barArea image.Rectangle, data SOTBarData, barX, barWidth, barHeight int, maxDuration time.Duration) {
+	barEndX := barX + barWidth
+
+	// Choose bar color
+	barColor := bc.barColor
+	if data.IsToday {
+		barColor = bc.todayBarColor
+	}
+
+	// Draw the bar
+	barTop := barArea.Max.Y - barHeight
+	for y := barTop; y < barArea.Max.Y; y++ {
+		for x := barX; x < barEndX; x++ {
+			if x >= barArea.Min.X && x < barArea.Max.X {
+				cvs.SetCell(image.Point{x, y}, '█', cell.FgColor(barColor))
+			}
+		}
+	}
+}
+
+// drawLabels draws the time and day labels for a bar
+func (bc *SOTBarChart) drawLabels(cvs *canvas.Canvas, area image.Rectangle, data SOTBarData, barCenter, barTop int) {
+	// Draw time label ABOVE the bar (positioned at the top of the bar)
+	timeLabel := bc.formatDuration(data.SOTDuration)
+	timeLabelX := barCenter - len(timeLabel)/2
+	if timeLabelX >= area.Min.X && timeLabelX+len(timeLabel) <= area.Max.X {
+		// Position above the top of the bar
+		timeLabelY := barTop - 1
+		if timeLabelY < area.Min.Y {
+			timeLabelY = area.Min.Y
+		}
+		timeLabelPos := image.Point{timeLabelX, timeLabelY}
+		draw.Text(cvs, timeLabel, timeLabelPos, draw.TextCellOpts(cell.FgColor(bc.textColor)))
+	}
+
+	// Draw day label below the bar
+	var dayLabel string
+	if data.IsToday {
+		dayLabel = "Today"
+	} else {
+		dayLabel = data.Date.Format("Mon")
+	}
+
+	dayLabelX := barCenter - len(dayLabel)/2
+	if dayLabelX >= area.Min.X && dayLabelX+len(dayLabel) <= area.Max.X {
+		dayLabelPos := image.Point{dayLabelX, area.Max.Y - 1}
+		draw.Text(cvs, dayLabel, dayLabelPos, draw.TextCellOpts(cell.FgColor(bc.textColor)))
+	}
+}
+
+// Draw implements widgetapi.Widget.Draw
+func (bc *SOTBarChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
+	area := cvs.Area()
+	if area.Dx() < 10 || area.Dy() < 5 {
+		return draw.ResizeNeeded(cvs)
+	}
+
+	// Clear canvas
+	cvs.Clear()
+
+	if len(bc.data) == 0 {
+		return draw.Text(cvs, "No SOT data", image.Point{1, 1})
+	}
+
+	barWidth, barSpacing, barArea := bc.calculateBarDimensions(area)
+
+	if barArea.Dy() < 1 {
+		return draw.ResizeNeeded(cvs)
+	}
+
+	maxDuration := bc.findMaxDuration()
 
 	// Draw each bar and its labels
 	for i, data := range bc.data {
 		// Calculate bar position with spacing
 		barX := barArea.Min.X + i*(barWidth+barSpacing)
-		barEndX := barX + barWidth
 
 		// Calculate bar height based on SOT duration
 		barHeight := 0
@@ -181,51 +243,13 @@ func (bc *SOTBarChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 			barHeight = int(float64(barArea.Dy()) * data.SOTDuration.Seconds() / maxDuration.Seconds())
 		}
 
-		// Choose bar color
-		barColor := bc.barColor
-		if data.IsToday {
-			barColor = bc.todayBarColor
-		}
-
-		// Draw the bar
-		barTop := barArea.Max.Y - barHeight
-		for y := barTop; y < barArea.Max.Y; y++ {
-			for x := barX; x < barEndX; x++ {
-				if x >= barArea.Min.X && x < barArea.Max.X {
-					cvs.SetCell(image.Point{x, y}, '█', cell.FgColor(barColor))
-				}
-			}
-		}
+		bc.drawBar(cvs, barArea, data, barX, barWidth, barHeight, maxDuration)
 
 		// Calculate center of bar for label alignment
 		barCenter := barX + barWidth/2
+		barTop := barArea.Max.Y - barHeight
 
-		// Draw time label ABOVE the bar (positioned at the top of the bar)
-		timeLabel := bc.formatDuration(data.SOTDuration)
-		timeLabelX := barCenter - len(timeLabel)/2
-		if timeLabelX >= area.Min.X && timeLabelX+len(timeLabel) <= area.Max.X {
-			// Position above the top of the bar
-			timeLabelY := barTop - 1
-			if timeLabelY < area.Min.Y {
-				timeLabelY = area.Min.Y
-			}
-			timeLabelPos := image.Point{timeLabelX, timeLabelY}
-			draw.Text(cvs, timeLabel, timeLabelPos, draw.TextCellOpts(cell.FgColor(bc.textColor)))
-		}
-
-		// Draw day label below the bar
-		var dayLabel string
-		if data.IsToday {
-			dayLabel = "Today"
-		} else {
-			dayLabel = data.Date.Format("Mon")
-		}
-
-		dayLabelX := barCenter - len(dayLabel)/2
-		if dayLabelX >= area.Min.X && dayLabelX+len(dayLabel) <= area.Max.X {
-			dayLabelPos := image.Point{dayLabelX, area.Max.Y - 1}
-			draw.Text(cvs, dayLabel, dayLabelPos, draw.TextCellOpts(cell.FgColor(bc.textColor)))
-		}
+		bc.drawLabels(cvs, area, data, barCenter, barTop)
 	}
 
 	return nil
