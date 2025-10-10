@@ -1,7 +1,6 @@
 
 <div align="center">
-	<img src="assets/battery-zen.png" alt="Battery Zen Logo" width="120" />
-</div>
+<img src="assets/battery-zen.png" alt="Battery Zen Logo" width="120" />
 
 # Battery Zen
 
@@ -14,10 +13,9 @@
 
 *A zen-like Go toolkit for mindful battery monitoring, logging, and real-time visualization on Linux.*
 
-<div align="center">
-	<img src="assets/battery-zen-tui-v7-screenshot.png" alt="Battery Zen TUI Screenshot" width="480" />
-</div>
+<img src="assets/battery-zen-tui-v7-screenshot.png" alt="Battery Zen TUI Screenshot" width="480" />
 
+</div>
 
 ## Features
 
