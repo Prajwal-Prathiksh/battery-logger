@@ -34,7 +34,7 @@ func BuildStatusLines(info StatusInfo) []LineSpec {
 	acIcon := "󱐤"
 	if info.Latest.AC {
 		acStatus = "Plugged In"
-		acIcon = ""
+		acIcon = ""
 	}
 	appendLine(fmt.Sprintf("%s  AC Status: %s", acIcon, acStatus), cell.ColorYellow, true)
 
@@ -90,7 +90,7 @@ func BuildStatusLines(info StatusInfo) []LineSpec {
 	appendLine("", 0, false)
 
 	// Screen-on time section
-	appendLine("  Screen-On Time (SOT):", cell.ColorCyan, true)
+	appendLine("󱎴  Screen-On Time (SOT):", cell.ColorCyan, true)
 
 	// Current session (since last suspend/wake)
 	if info.ScreenOnTime.LastActiveSession > 0 {
@@ -139,7 +139,7 @@ func BuildStatusLines(info StatusInfo) []LineSpec {
 	appendLine("", 0, false)
 
 	// Summary section
-	appendLine("  Data Summary:", 0, false)
+	appendLine("  Data Summary:", 0, false)
 	appendLine(fmt.Sprintf("--    Total samples: %d (spanning %s)", info.TotalSamples, FormatDurationAuto(info.TimeRange.Round(time.Minute))), 0, false)
 	appendLine(fmt.Sprintf("--    AC plugged: %d samples", info.ACSamples), cell.ColorGreen, true)
 	appendLine(fmt.Sprintf("--    On battery: %d samples", info.BattSamples), cell.ColorRed, true)
@@ -149,7 +149,7 @@ func BuildStatusLines(info StatusInfo) []LineSpec {
 	appendLine("", 0, false)
 
 	// Paths & config
-	appendLine(fmt.Sprintf("  Data file: %s", info.LogPath), 0, false)
+	appendLine(fmt.Sprintf("  Data file: %s", info.LogPath), 0, false)
 	appendLine(info.ConfigStr, 0, false)
 
 	return lines

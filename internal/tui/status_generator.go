@@ -108,9 +108,9 @@ func GenerateStatusInfo(rows []analytics.Row, alpha float64, uiParams *UIParams,
 	if len(existingConfigPaths) == 0 {
 		configStr = "  Config: Using defaults (no config file found)" // nf-md-cog
 	} else if len(existingConfigPaths) == 1 {
-		configStr = fmt.Sprintf("  Config file: %s", existingConfigPaths[0]) // nf-md-cog
+		configStr = fmt.Sprintf("  Config file: %s", existingConfigPaths[0]) // nf-md-cog
 	} else {
-		configStr = fmt.Sprintf("  Config files: %s (+ %d more)", existingConfigPaths[len(existingConfigPaths)-1], len(existingConfigPaths)-1) // nf-md-cog
+		configStr = fmt.Sprintf("  Config files: %s (+ %d more)", existingConfigPaths[len(existingConfigPaths)-1], len(existingConfigPaths)-1) // nf-md-cog
 	}
 
 	// Get battery cycle count
