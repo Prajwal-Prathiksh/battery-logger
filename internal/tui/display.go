@@ -90,7 +90,7 @@ func BuildStatusLines(info StatusInfo) []LineSpec {
 	appendLine("", 0, false)
 
 	// Screen-on time section
-	appendLine("󱎴  Screen-On Time (SOT):", cell.ColorCyan, true)
+	appendLine("󱎴  Screen-On Time:", 0, false)
 
 	// Current session (since last suspend/wake)
 	if info.ScreenOnTime.LastActiveSession > 0 {
