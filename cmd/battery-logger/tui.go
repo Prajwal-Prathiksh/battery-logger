@@ -26,7 +26,7 @@ func runTUI() {
 
 	// Initialize UI parameters with defaults - refresh is fixed at 10s
 	uiParams := &tui.UIParams{
-		Refresh: 10 * time.Second, // Fixed refresh rate
+		Refresh: 20 * time.Second, // Fixed refresh rate
 	}
 
 	// Get the log file path and config using the config system
