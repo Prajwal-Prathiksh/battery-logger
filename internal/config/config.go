@@ -142,61 +142,55 @@ func loadConfigFile(path string, cfg *Config) error {
 		}
 
 		// Set config values based on key
-		switch key {
-		case "interval_secs":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.IntervalSecs = val
-			}
-		case "interval_secs_on_ac":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.IntervalSecsOnAC = val
-			}
-		case "timezone":
-			cfg.Timezone = value
-		case "log_dir":
-			cfg.LogDir = value
-		case "log_file":
-			cfg.LogFile = value
-		case "max_lines":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.MaxLines = val
-			}
-		case "trim_buffer":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.TrimBuffer = val
-			}
-		case "max_charge_percent":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.MaxChargePercent = val
-			}
-		case "day_color_number":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.DayColorNumber = val
-			}
-		case "night_color_number":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.NightColorNumber = val
-			}
-		case "day_start_hour":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.DayStartHour = val
-			}
-		case "day_end_hour":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.DayEndHour = val
-			}
-		case "max_window_zoom":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.MaxWindowZoom = val
-			}
-		case "suspend_gap_minutes":
-			if val, err := strconv.Atoi(value); err == nil {
-				cfg.SuspendGapMinutes = val
-			}
+		if err := setConfigValue(key, value, cfg); err != nil {
+			// Log or handle error if needed, but for now continue
 		}
 	}
 
 	return scanner.Err()
+}
+
+func setConfigValue(key, value string, cfg *Config) error {
+	switch key {
+	case "interval_secs":
+		return parseIntValue(value, &cfg.IntervalSecs)
+	case "interval_secs_on_ac":
+		return parseIntValue(value, &cfg.IntervalSecsOnAC)
+	case "timezone":
+		cfg.Timezone = value
+	case "log_dir":
+		cfg.LogDir = value
+	case "log_file":
+		cfg.LogFile = value
+	case "max_lines":
+		return parseIntValue(value, &cfg.MaxLines)
+	case "trim_buffer":
+		return parseIntValue(value, &cfg.TrimBuffer)
+	case "max_charge_percent":
+		return parseIntValue(value, &cfg.MaxChargePercent)
+	case "day_color_number":
+		return parseIntValue(value, &cfg.DayColorNumber)
+	case "night_color_number":
+		return parseIntValue(value, &cfg.NightColorNumber)
+	case "day_start_hour":
+		return parseIntValue(value, &cfg.DayStartHour)
+	case "day_end_hour":
+		return parseIntValue(value, &cfg.DayEndHour)
+	case "max_window_zoom":
+		return parseIntValue(value, &cfg.MaxWindowZoom)
+	case "suspend_gap_minutes":
+		return parseIntValue(value, &cfg.SuspendGapMinutes)
+	}
+	return nil
+}
+
+func parseIntValue(value string, target *int) error {
+	val, err := strconv.Atoi(value)
+	if err != nil {
+		return err
+	}
+	*target = val
+	return nil
 }
 
 func XDGLogPath(cfg Config) (string, error) {
