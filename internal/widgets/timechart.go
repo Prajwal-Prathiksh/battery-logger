@@ -258,8 +258,8 @@ func (tc *BatteryChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 	}
 
 	area := cvs.Area()
-	if area.Dx() < 10 || area.Dy() < 5 {
-		return draw.ResizeNeeded(cvs)
+	if err := validateArea(cvs, area); err != nil {
+		return err
 	}
 
 	// Clear canvas
@@ -273,8 +273,8 @@ func (tc *BatteryChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 		area.Max.Y-3, // X-axis labels
 	)
 
-	if plotArea.Dx() < 5 || plotArea.Dy() < 3 {
-		return draw.ResizeNeeded(cvs)
+	if err := validatePlotArea(cvs, plotArea); err != nil {
+		return err
 	}
 
 	// Calculate time range - use current zoom window
@@ -331,6 +331,20 @@ func (tc *BatteryChart) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 		return tc.drawDayBreakLines(cvs, plotArea, startTime, endTime)
 	}
 
+	return nil
+}
+
+func validateArea(cvs *canvas.Canvas, area image.Rectangle) error {
+	if area.Dx() < 10 || area.Dy() < 5 {
+		return draw.ResizeNeeded(cvs)
+	}
+	return nil
+}
+
+func validatePlotArea(cvs *canvas.Canvas, plotArea image.Rectangle) error {
+	if plotArea.Dx() < 5 || plotArea.Dy() < 3 {
+		return draw.ResizeNeeded(cvs)
+	}
 	return nil
 }
 
