@@ -1,11 +1,11 @@
-# Battery Logger Makefile
+# Battery Zen Makefile
 
 PREFIX ?= $(HOME)/.local
 BINDIR = $(PREFIX)/bin
 SERVICEDIR = $(HOME)/.config/systemd/user
 
-BINARY_NAME = battery-logger
-SERVICE_NAME = battery-logger.service
+BINARY_NAME = battery-zen
+SERVICE_NAME = battery-zen.service
 
 .PHONY: help build clean copy-config desktop-icon install install-service logs setup start status stop uninstall
 
@@ -14,8 +14,8 @@ help:
 	@echo "Available targets:"
 	@echo "  build            - Build the binary"
 	@echo "  clean            - Remove built binary"
-	@echo "  copy-config      - Copy default config to ~/.config/battery-logger (if not exists)"
-	@echo "  desktop-icon     - Install desktop icon for Battery Logger"
+	@echo "  copy-config      - Copy default config to ~/.config/battery-zen (if not exists)"
+	@echo "  desktop-icon     - Install desktop icon for Battery Zen"
 	@echo "  install          - Install binary to ~/.local/bin"
 	@echo "  install-service  - Install and enable systemd service"
 	@echo "  logs             - Follow service logs"
@@ -28,7 +28,7 @@ help:
 
 # Build the binary
 build:
-	go build -o $(BINARY_NAME) ./cmd/battery-logger
+	go build -o $(BINARY_NAME) ./cmd/battery-zen
 
 # Clean built binary
 clean:
@@ -36,18 +36,18 @@ clean:
 
 # Copy default config to user's config directory (skip if exists)
 copy-config:
-	mkdir -p $(HOME)/.config/battery-logger
-	[ -f $(HOME)/.config/battery-logger/config.toml ] || cp internal/config/config.toml $(HOME)/.config/battery-logger/config.toml
+	mkdir -p $(HOME)/.config/battery-zen
+	[ -f $(HOME)/.config/battery-zen/config.toml ] || cp internal/config/config.toml $(HOME)/.config/battery-zen/config.toml
 
 # Install desktop icon
 desktop-icon:
 	mkdir -p $(HOME)/.local/share/applications
 	mkdir -p $(HOME)/.local/share/icons
-	cp assets/battery-logger.png $(HOME)/.local/share/icons/battery-logger.png
+	cp assets/battery-zen.png $(HOME)/.local/share/icons/battery-zen.png
 	sed \
 		-e 's|@BINDIR@|$(BINDIR)|g' \
 		-e 's|@ICONDIR@|$(HOME)/.local/share/icons|g' \
-		battery-logger.desktop.in > $(HOME)/.local/share/applications/battery-logger.desktop
+		battery-zen.desktop.in > $(HOME)/.local/share/applications/battery-zen.desktop
 
 # Install binary to ~/.local/bin
 install: build
@@ -57,7 +57,7 @@ install: build
 # Install systemd user service
 install-service: install
 	mkdir -p $(SERVICEDIR)
-	sed 's|ExecStart=.*|ExecStart=$(BINDIR)/$(BINARY_NAME) run|' systemd/battery-logger@.service > $(SERVICEDIR)/$(SERVICE_NAME)
+	sed 's|ExecStart=.*|ExecStart=$(BINDIR)/$(BINARY_NAME) run|' systemd/battery-zen@.service > $(SERVICEDIR)/$(SERVICE_NAME)
 	systemctl --user daemon-reload
 	systemctl --user enable $(SERVICE_NAME)
 

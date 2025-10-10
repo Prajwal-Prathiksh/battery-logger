@@ -1,12 +1,12 @@
-# Battery Logger TUI
+# Battery Zen TUI
 
-The Battery Logger TUI provides real-time visualization of your battery data with intelligent discharge prediction, advanced charting, and interactive controls.
+The Battery Zen TUI provides real-time visualization of your battery data with intelligent discharge prediction, advanced charting, and interactive controls.
 
 
 ## Usage
 
 ```bash
-./battery-logger tui [options]
+./battery-zen tui [options]
 ```
 
 ## Options
@@ -63,12 +63,12 @@ The Battery Logger TUI provides real-time visualization of your battery data wit
 
 ### Basic usage with default settings
 ```bash
-./battery-logger tui
+./battery-zen tui
 ```
 
 ### Focus on recent data with custom settings
 ```bash
-./battery-logger tui -alpha 0.1
+./battery-zen tui -alpha 0.1
 ```
 
 
@@ -105,9 +105,9 @@ The TUI uses **weighted linear regression** to predict battery discharge and cha
 ## Troubleshooting
 
 ### "No recent data in window"
-- Check if battery-logger service is running: `systemctl --user status battery-logger`
-- Verify data file exists: `~/.local/state/battery-logger/battery.csv`
-- Ensure battery-logger has been collecting data for some time
+- Check if battery-zen service is running: `systemctl --user status battery-zen`
+- Verify data file exists: `~/.local/state/battery-zen/battery.csv`
+- Ensure battery-zen has been collecting data for some time
 
 ### "Need ≥2 charging/discharging samples"
 - Wait for more data points to be collected in the current session (charging or discharging)

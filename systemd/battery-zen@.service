@@ -1,17 +1,17 @@
 [Unit]
-Description=Battery Logger Daemon (User Service)
+Description=Battery Zen Daemon (User Service)
 After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/battery-logger run
+ExecStart=%h/.local/bin/battery-zen run
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
 
 # Create necessary directories
-ExecStartPre=/bin/mkdir -p %h/.local/state/battery-logger
+ExecStartPre=/bin/mkdir -p %h/.local/state/battery-zen
 
 [Install]
 WantedBy=default.target

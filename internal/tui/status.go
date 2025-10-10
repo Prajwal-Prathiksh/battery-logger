@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/analytics"
 )
 
 // UIParams holds the real-time adjustable parameters

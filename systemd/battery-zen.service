@@ -1,19 +1,19 @@
 [Unit]
-Description=Battery Logger Daemon
+Description=Battery Zen Daemon
 After=multi-user.target
 Wants=network.target
 
 [Service]
 Type=simple
 User=%i
-ExecStart=/home/prajwal/github-repos/battery-logger/battery-logger run
+ExecStart=/home/prajwal/github-repos/battery-zen/battery-zen run
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
 
 # Create necessary directories
-ExecStartPre=/bin/mkdir -p /home/prajwal/.local/state/battery-logger
+ExecStartPre=/bin/mkdir -p /home/prajwal/.local/state/battery-zen
 
 [Install]
 WantedBy=multi-user.target

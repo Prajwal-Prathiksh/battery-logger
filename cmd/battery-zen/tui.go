@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/tui"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/tui"
 
 	"github.com/mum4k/termdash"
 	"github.com/mum4k/termdash/terminal/tcell"

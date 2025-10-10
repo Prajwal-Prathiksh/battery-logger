@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Battery Zen
+Exec=@BINDIR@/battery-zen tui
+Icon=@ICONDIR@/battery-zen.png
+Terminal=true
+Categories=Utility;System;

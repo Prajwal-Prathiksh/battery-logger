@@ -12,8 +12,8 @@ type PIDFile struct {
 	Path string
 }
 
-// isBatteryLoggerProcess checks if the given PID belongs to a battery-logger process
-func isBatteryLoggerProcess(pid int) bool {
+// isBatteryZenProcess checks if the given PID belongs to a battery-zen process
+func isBatteryZenProcess(pid int) bool {
 	// Check if the process exists
 	procPath := fmt.Sprintf("/proc/%d", pid)
 	if _, err := os.Stat(procPath); err != nil {
@@ -27,9 +27,9 @@ func isBatteryLoggerProcess(pid int) bool {
 		return false
 	}
 
-	// Check if it's battery-logger (trim newline)
+	// Check if it's battery-zen (trim newline)
 	processName := strings.TrimSpace(string(comm))
-	if processName == "battery-logger" {
+	if processName == "battery-zen" {
 		return true
 	}
 
@@ -43,7 +43,7 @@ func isBatteryLoggerProcess(pid int) bool {
 	// cmdline is null-separated, so convert nulls to spaces and check
 	cmdlineStr := string(cmdline)
 	cmdlineStr = strings.ReplaceAll(cmdlineStr, "\x00", " ")
-	return strings.Contains(cmdlineStr, "battery-logger")
+	return strings.Contains(cmdlineStr, "battery-zen")
 }
 
 func (p *PIDFile) Acquire() (bool, error) {
@@ -57,15 +57,15 @@ func (p *PIDFile) Acquire() (bool, error) {
 		_, _ = f.WriteString(strconv.Itoa(os.Getpid()))
 		return true, nil
 	}
-	// If exists, check if process is alive and is actually battery-logger; if not, remove and retry
+	// If exists, check if process is alive and is actually battery-zen; if not, remove and retry
 	b, readErr := os.ReadFile(p.Path)
 	if readErr != nil {
 		return false, readErr
 	}
 	pid, _ := strconv.Atoi(string(b))
 	if pid > 0 {
-		if isBatteryLoggerProcess(pid) {
-			// Another battery-logger instance is actually running
+		if isBatteryZenProcess(pid) {
+			// Another battery-zen instance is actually running
 			return false, nil
 		}
 	}

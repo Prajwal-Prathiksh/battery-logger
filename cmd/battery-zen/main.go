@@ -9,11 +9,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/config"
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/lock"
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/logfile"
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/sysfs"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/analytics"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/config"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/lock"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/logfile"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/sysfs"
 )
 
 func main() {
@@ -41,7 +41,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `battery-logger commands:
+	fmt.Fprintf(os.Stderr, `battery-zen commands:
   sample     Append one CSV sample (used by systemd timer)
   run        Daemon loop (periodic)
   trim       Force trim to max_lines
@@ -97,7 +97,7 @@ func sampleCmd() {
 func runCmd() {
 	cfg, logPath := loadPaths()
 	// Guard with pidfile so only one daemon runs
-	lockPath := cfg.LogDir + "/.battery-logger.pid"
+	lockPath := cfg.LogDir + "/.battery-zen.pid"
 	pf := &lock.PIDFile{Path: lockPath}
 	ok, err := pf.Acquire()
 	if err != nil {

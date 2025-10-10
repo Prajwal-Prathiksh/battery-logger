@@ -6,7 +6,7 @@ import (
 	"image"
 	"time"
 
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/analytics"
 
 	"github.com/mum4k/termdash/cell"
 	"github.com/mum4k/termdash/private/canvas"

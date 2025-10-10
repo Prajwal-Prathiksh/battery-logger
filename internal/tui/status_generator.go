@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/config"
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/sysfs"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/analytics"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/config"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/sysfs"
 )
 
 // FindLastACTransition finds when the current AC status started

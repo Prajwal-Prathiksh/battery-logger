@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/config"
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/widgets"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/config"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/widgets"
 
 	"time"
 
@@ -51,7 +51,7 @@ func CreateUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, t
 	return container.New(
 		t,
 		container.Border(linestyle.Light),
-		container.BorderTitle("Battery Logger TUI - Tab/Shift+Tab: focus, q: quit, r: refresh"),
+		container.BorderTitle("Battery Zen TUI - Tab/Shift+Tab: focus, q: quit, r: refresh"),
 		container.KeyFocusNext(keyboard.KeyTab),
 		container.KeyFocusPrevious(keyboard.KeyBacktab),
 		container.SplitHorizontal(
