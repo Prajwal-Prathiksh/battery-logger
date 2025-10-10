@@ -32,7 +32,7 @@ func Defaults() Config {
 		IntervalSecs:      60,
 		IntervalSecsOnAC:  300,
 		Timezone:          "Local",
-		LogDir:            filepath.Join(xdgStateHome(), "battery-logger"),
+		LogDir:            filepath.Join(xdgStateHome(), "battery-zen"),
 		LogFile:           "battery.csv",
 		MaxLines:          4000,
 		TrimBuffer:        100,
@@ -52,9 +52,9 @@ func getConfigPathsInternal() []string {
 		// Local project config
 		filepath.Join("internal", "config", "config.toml"),
 		// User config
-		filepath.Join(xdgConfigHome(), "battery-logger", "config.toml"),
+		filepath.Join(xdgConfigHome(), "battery-zen", "config.toml"),
 		// System config
-		"/etc/battery-logger/config.toml",
+		"/etc/battery-zen/config.toml",
 	}
 }
 

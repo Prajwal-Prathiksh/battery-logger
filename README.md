@@ -1,14 +1,21 @@
 
 <div align="center">
-	<img src="assets/battery-logger.png" alt="Battery Logger Logo" width="120" />
+-lo	<img src="assets/battery-zen.png" alt="Battery Zen Logo" width="120" />
 </div>
 
-# Battery Logger
+# Battery Zen
 
-*A lightweight Go daemon for battery monitoring, logging, and real-time visualization on Linux.*
+[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org/)
+[![License](https://img.shields.io/github/license/Prajwal-Prathiksh/battery-zen?style=flat)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Prajwal-Prathiksh/battery-zen?style=flat)](https://github.com/Prajwal-Prathiksh/battery-zen/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Prajwal-Prathiksh/battery-zen)](https://goreportcard.com/report/github.com/Prajwal-Prathiksh/battery-zen)
+[![Platform](https://img.shields.io/badge/platform-Linux-blue?style=flat&logo=linux)](https://kernel.org/)
+[![Systemd](https://img.shields.io/badge/systemd-supported-green?style=flat)](https://systemd.io/)
+
+*A zen-like Go toolkit for mindful battery monitoring, logging, and real-time visualization on Linux.*
 
 <div align="center">
-	<img src="assets/battery-logger-tui-v7-screenshot.png" alt="Battery Logger TUI Screenshot" width="480" />
+	<img src="assets/battery-zen-tui-v7-screenshot.png" alt="Battery Zen TUI Screenshot" width="480" />
 </div>
 
 
@@ -34,9 +41,9 @@
 ## Usage
 
 ```bash
-battery-logger run      # Start daemon
-battery-logger tui      # Launch TUI
-battery-logger status   # Show status
+battery-zen run      # Start daemon
+battery-zen tui      # Launch TUI
+battery-zen status   # Show status
 ```
 
 See [docs/TUI.md](docs/TUI.md) for advanced TUI features and controls.
@@ -57,8 +64,8 @@ make uninstall  # Remove everything
 
 Config files (TOML):
 - [`internal/config/config.toml`](internal/config/config.toml) (local)
-- `~/.config/battery-logger/config.toml` (user)
-- `/etc/battery-logger/config.toml` (system)
+- `~/.config/battery-zen/config.toml` (user)
+- `/etc/battery-zen/config.toml` (system)
 
 Key settings:
 - `interval_secs`: Data logging frequency (default: 60s)
@@ -72,7 +79,7 @@ See config file for all available options.
 
 ## Output
 
-CSV log: `~/.local/state/battery-logger/battery.csv`
+CSV log: `~/.local/state/battery-zen/battery.csv`
 
 
 ## Analytics & Predictions
@@ -86,7 +93,7 @@ The TUI provides comprehensive battery analytics:
 - **Daily Trends**: Bar chart showing SOT for the past 7 days
 - **Suspend Detection**: Tracks sleep periods and battery drain during suspend
 
-> **Note**: SOT is calculated as a proxy based on continuous data logging. If the system is left idle with the screen off but battery-logger still running, it will count toward SOT. The calculation assumes logging gaps ≥5 minutes indicate system suspend/shutdown.
+> **Note**: SOT is calculated as a proxy based on continuous data logging. If the system is left idle with the screen off but Battery Zen still running, it will count toward SOT. The calculation assumes logging gaps ≥5 minutes indicate system suspend/shutdown.
 
 
 ## Manual Service Installation
@@ -104,7 +111,7 @@ See [`systemd/`](systemd/) for service files. Use `make` or copy manually for cu
 ## Development
 
 ```bash
-go build ./cmd/battery-logger
+go build ./cmd/battery-zen
 make clean
 ```
 
@@ -117,8 +124,8 @@ All configuration options available in config files:
 - `interval_secs = 60` - Data logging frequency in seconds
 - `interval_secs_on_ac = 60` - Logging frequency when AC connected
 - `timezone = "Local"` - Timezone for timestamps
-- `log_dir = "~/.local/state/battery-logger"` - Directory for log files
-- `log_file = "battery.csv"` - Name of the CSV log file
+- `log_dir = "~/.local/state/battery-zen"` - Directory for log files
+- `log_file = "battery-zen.csv"` - Name of the CSV log file
 - `max_lines = 4000` - Maximum lines in log before rotation
 - `trim_buffer = 100` - Lines to keep when trimming log
 - `max_charge_percent = 100` - Maximum charge threshold for predictions

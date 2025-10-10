@@ -1,24 +1,24 @@
 #!/bin/bash
-# Battery Logger Installation Script
+# Battery Zen Installation Script
 
 set -e
 
-echo "  Installing Battery Logger..."
+echo "  Installing Battery Zen..."
 
 # Build, install, setup service, desktop icon, and copy config
 make setup
 
-echo "  Battery Logger installed and started!"
+echo "  Battery Zen installed and started!"
 echo ""
-echo "  Data file: ~/.local/state/battery-logger/battery.csv"
-echo "  Binary: ~/.local/bin/battery-logger"
-echo "  Application: ~/.local/share/applications/battery-logger.desktop"
-echo "  Config file: ~/.config/battery-logger/config.toml"
+echo "  Data file: ~/.local/state/battery-zen/battery.csv"
+echo "  Binary: ~/.local/bin/battery-zen"
+echo "  Application: ~/.local/share/applications/battery-zen.desktop"
+echo "  Config file: ~/.config/battery-zen/config.toml"
 
 
 
 # Check for missing config fields
-config_file="$HOME/.config/battery-logger/config.toml"
+config_file="$HOME/.config/battery-zen/config.toml"
 default_config="internal/config/config.toml"
 required_fields=($(grep -v '^#' "$default_config" | grep " = " | awk -F' = ' '{print $1}' | tr -d ' '))
 missing_fields=()

@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/config"
-	"github.com/Prajwal-Prathiksh/battery-logger/internal/widgets"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/analytics"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/config"
+	"github.com/Prajwal-Prathiksh/battery-zen/internal/widgets"
 
 	"github.com/mum4k/termdash/cell"
 	"github.com/mum4k/termdash/container"
