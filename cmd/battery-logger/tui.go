@@ -47,10 +47,7 @@ func runTUI() {
 		log.Fatalf("CreateTextWidget => %v", err)
 	}
 
-	sotBarChart, err := tui.CreateSOTBarChart()
-	if err != nil {
-		log.Fatalf("CreateSOTBarChart => %v", err)
-	}
+	sotBarChart := tui.CreateSOTBarChart()
 
 	// Data update function (declared here so it can be used in callbacks)
 	var updateData func() error

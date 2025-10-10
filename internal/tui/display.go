@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/Prajwal-Prathiksh/battery-logger/internal/analytics"
+	"github.com/Prajwal-Prathiksh/battery-logger/internal/widgets"
 
 	"github.com/mum4k/termdash/cell"
-	"github.com/mum4k/termdash/widgets/barchart"
 	"github.com/mum4k/termdash/widgets/text"
 )
 
@@ -197,58 +197,8 @@ func CalculateWeeklySOTData(rows []analytics.Row, gapThresholdMinutes int) []Dai
 }
 
 // UpdateSOTBarChart updates the daily SOT bar chart with new data
-func UpdateSOTBarChart(barChart *barchart.BarChart, rows []analytics.Row, gapThresholdMinutes int) error {
-	weekData := CalculateWeeklySOTData(rows, gapThresholdMinutes)
-
-	var values []int
-	var labels []string
-	var maxMinutes int = 60 // Minimum scale: 1 hour
-
-	// Prepare data for bar chart
-	for _, day := range weekData {
-		// Convert hours to minutes for integer values
-		sotMinutes := int(day.SOTHours * 60)
-		values = append(values, sotMinutes)
-
-		// Track max for scaling
-		if sotMinutes > maxMinutes {
-			maxMinutes = sotMinutes
-		}
-
-		// Create labels with day abbreviation
-		dayLabel := day.Date.Format("Mon")
-		if day.IsToday {
-			dayLabel = "Today"
-		}
-		labels = append(labels, dayLabel)
-	}
-
-	// If all values are zero, set a reasonable scale
-	if maxMinutes <= 60 {
-		maxMinutes = 480 // 8 hours in minutes
-	} else {
-		// Add some padding to the max scale
-		maxMinutes = int(float64(maxMinutes) * 1.1)
-	}
-
-	// Update bar chart colors - highlight today
-	var barColors []cell.Color
-	var valueColors []cell.Color
-	for _, day := range weekData {
-		if day.IsToday {
-			barColors = append(barColors, cell.ColorYellow)
-			valueColors = append(valueColors, cell.ColorBlack)
-		} else {
-			barColors = append(barColors, cell.ColorCyan)
-			valueColors = append(valueColors, cell.ColorWhite)
-		}
-	}
-
-	// Update the bar chart with raw minute values shown
-	return barChart.Values(values, maxMinutes,
-		barchart.Labels(labels),
-		barchart.BarColors(barColors),
-		barchart.ValueColors(valueColors),
-		barchart.ShowValues(), // Show raw minute values
-	)
+func UpdateSOTBarChart(barChart *widgets.SOTBarChart, rows []analytics.Row, gapThresholdMinutes int) error {
+	// Simply call UpdateData on our custom widget
+	barChart.UpdateData(rows, gapThresholdMinutes)
+	return nil
 }

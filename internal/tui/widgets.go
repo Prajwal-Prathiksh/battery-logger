@@ -11,7 +11,6 @@ import (
 	"github.com/mum4k/termdash/keyboard"
 	"github.com/mum4k/termdash/linestyle"
 	"github.com/mum4k/termdash/terminal/terminalapi"
-	"github.com/mum4k/termdash/widgets/barchart"
 	"github.com/mum4k/termdash/widgets/text"
 )
 
@@ -36,32 +35,19 @@ func CreateTextWidget() (*text.Text, error) {
 }
 
 // CreateSOTBarChart creates and configures the daily SOT bar chart widget
-func CreateSOTBarChart() (*barchart.BarChart, error) {
-	return barchart.New(
-		barchart.ShowValues(), // Show raw minute values
-		barchart.BarColors([]cell.Color{
-			cell.ColorCyan,
-			cell.ColorCyan,
-			cell.ColorCyan,
-			cell.ColorCyan,
-			cell.ColorCyan,
-			cell.ColorCyan,
-			cell.ColorYellow, // Today in different color
-		}),
-		barchart.ValueColors([]cell.Color{
-			cell.ColorWhite,
-			cell.ColorWhite,
-			cell.ColorWhite,
-			cell.ColorWhite,
-			cell.ColorWhite,
-			cell.ColorWhite,
-			cell.ColorBlack, // Today values in black for contrast
-		}),
+func CreateSOTBarChart() *widgets.SOTBarChart {
+	return widgets.CreateSOTBarChart(
+		widgets.SOTBarTitle("Daily Screen-On Time (7 days)"),
+		widgets.SOTBarColors(
+			cell.ColorCyan,   // Regular bar color
+			cell.ColorYellow, // Today bar color
+			cell.ColorWhite,  // Text color
+		),
 	)
 }
 
 // CreateUILayout creates the TUI container layout with all widgets
-func CreateUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, textWidget *text.Text, sotBarChart *barchart.BarChart) (*container.Container, error) {
+func CreateUILayout(t terminalapi.Terminal, chartWidget *widgets.BatteryChart, textWidget *text.Text, sotBarChart *widgets.SOTBarChart) (*container.Container, error) {
 	return container.New(
 		t,
 		container.Border(linestyle.Light),
