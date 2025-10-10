@@ -91,44 +91,44 @@ func BuildStatusLines(info StatusInfo) []LineSpec {
 
 	// Current session (since last suspend/wake)
 	if info.ScreenOnTime.LastActiveSession > 0 {
-		appendLine(fmt.Sprintf("--    Current session: %s", FormatDurationAuto(info.ScreenOnTime.LastActiveSession)), 0, false)
+		var sessionText string
+		if info.LastSuspendEvent != nil {
+			sessionText = fmt.Sprintf("--    Current session: %s (since: %s)",
+				FormatDurationAuto(info.ScreenOnTime.LastActiveSession),
+				info.LastSuspendEvent.EndTime.Format("Jan 2 15:04"))
+		} else {
+			sessionText = fmt.Sprintf("--    Current session: %s", FormatDurationAuto(info.ScreenOnTime.LastActiveSession))
+		}
+		appendLine(sessionText, 0, false)
 	}
 
 	// Today's total SOT
 	if info.TodayScreenOnTime.TotalActiveTime > 0 {
 		appendLine(fmt.Sprintf("--    Today's total: %s", FormatDurationAuto(info.TodayScreenOnTime.TotalActiveTime)), 0, false)
-		if len(info.TodayScreenOnTime.SuspendEvents) > 0 {
-			appendLine(fmt.Sprintf("--    Today's suspends: %d (total: %s)",
-				len(info.TodayScreenOnTime.SuspendEvents),
-				FormatDurationAuto(info.TodayScreenOnTime.SuspendTime)), 0, false)
-		}
 	}
 
 	// Last suspend/shutdown event details
 	if info.LastSuspendEvent != nil {
-		appendLine(fmt.Sprintf("--    Last suspend: %s ago (lasted %s)",
-			FormatDurationAuto(time.Since(info.LastSuspendEvent.EndTime)),
+		appendLine(fmt.Sprintf("--    Last suspend: %s - %s (lasted %s)",
+			info.LastSuspendEvent.StartTime.Format("Jan 2 15:04"),
+			info.LastSuspendEvent.EndTime.Format("Jan 2 15:04"),
 			FormatDurationAuto(info.LastSuspendEvent.Duration)), 0, false)
-		if info.LastSuspendEvent.BatteryDrop > 0 {
-			appendLine(fmt.Sprintf("--    Battery drain during suspend: %.1f%% (%.1f%% → %.1f%%)",
-				info.LastSuspendEvent.BatteryDrop,
-				info.LastSuspendEvent.BatteryBefore,
-				info.LastSuspendEvent.BatteryAfter), cell.ColorRed, true)
-		} else if info.LastSuspendEvent.BatteryDrop < 0 {
-			appendLine(fmt.Sprintf("--    Battery gained during suspend: +%.1f%% (%.1f%% → %.1f%%)",
-				-info.LastSuspendEvent.BatteryDrop,
-				info.LastSuspendEvent.BatteryBefore,
-				info.LastSuspendEvent.BatteryAfter), cell.ColorGreen, true)
-		}
-	}
 
-	// Total active time in the data window
-	if info.ScreenOnTime.TotalActiveTime > 0 {
-		appendLine(fmt.Sprintf("--    Total active time in window: %s", FormatDurationAuto(info.ScreenOnTime.TotalActiveTime)), 0, false)
-		if len(info.ScreenOnTime.SuspendEvents) > 0 {
-			appendLine(fmt.Sprintf("--    Total suspend events: %d (total: %s)",
-				len(info.ScreenOnTime.SuspendEvents),
-				FormatDurationAuto(info.ScreenOnTime.SuspendTime)), 0, false)
+		// Always show battery change with arrow
+		if info.LastSuspendEvent.BatteryDrop > 0 {
+			appendLine(fmt.Sprintf("--        Battery: %.1f%% → %.1f%% (%.1f%% drain)",
+				info.LastSuspendEvent.BatteryBefore,
+				info.LastSuspendEvent.BatteryAfter,
+				info.LastSuspendEvent.BatteryDrop), cell.ColorRed, true)
+		} else if info.LastSuspendEvent.BatteryDrop < 0 {
+			appendLine(fmt.Sprintf("--        Battery: %.1f%% → %.1f%% (+%.1f%% gain)",
+				info.LastSuspendEvent.BatteryBefore,
+				info.LastSuspendEvent.BatteryAfter,
+				-info.LastSuspendEvent.BatteryDrop), cell.ColorGreen, true)
+		} else {
+			appendLine(fmt.Sprintf("--        Battery: %.1f%% → %.1f%% (no change)",
+				info.LastSuspendEvent.BatteryBefore,
+				info.LastSuspendEvent.BatteryAfter), 0, false)
 		}
 	}
 
