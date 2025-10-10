@@ -117,22 +117,19 @@ func BuildStatusLines(info StatusInfo) []LineSpec {
 			info.LastSuspendEvent.EndTime.Format("Jan 2 15:04"),
 			FormatDurationAuto(info.LastSuspendEvent.Duration)), 0, false)
 
-		// Always show battery change with arrow
+		// Battery change with arrow
+		var changeStr string
 		if info.LastSuspendEvent.BatteryDrop > 0 {
-			appendLine(fmt.Sprintf("--        Battery: %.1f%% → %.1f%% (%.1f%% drain)",
-				info.LastSuspendEvent.BatteryBefore,
-				info.LastSuspendEvent.BatteryAfter,
-				info.LastSuspendEvent.BatteryDrop), cell.ColorRed, true)
+			changeStr = fmt.Sprintf("(%.1f%% drain)", info.LastSuspendEvent.BatteryDrop)
 		} else if info.LastSuspendEvent.BatteryDrop < 0 {
-			appendLine(fmt.Sprintf("--        Battery: %.1f%% → %.1f%% (+%.1f%% gain)",
-				info.LastSuspendEvent.BatteryBefore,
-				info.LastSuspendEvent.BatteryAfter,
-				-info.LastSuspendEvent.BatteryDrop), cell.ColorGreen, true)
+			changeStr = fmt.Sprintf("(+%.1f%% gain)", -info.LastSuspendEvent.BatteryDrop)
 		} else {
-			appendLine(fmt.Sprintf("--        Battery: %.1f%% → %.1f%% (no change)",
-				info.LastSuspendEvent.BatteryBefore,
-				info.LastSuspendEvent.BatteryAfter), 0, false)
+			changeStr = "(no change)"
 		}
+		appendLine(fmt.Sprintf("--        Battery: %.1f%% → %.1f%% %s",
+			info.LastSuspendEvent.BatteryBefore,
+			info.LastSuspendEvent.BatteryAfter,
+			changeStr), 0, false)
 	}
 
 	// Spacer
@@ -149,7 +146,7 @@ func BuildStatusLines(info StatusInfo) []LineSpec {
 	appendLine("", 0, false)
 
 	// Paths & config
-	appendLine(fmt.Sprintf("  Data file: %s", info.LogPath), 0, false)
+	appendLine(fmt.Sprintf("  Log file: %s", info.LogPath), 0, false)
 	appendLine(info.ConfigStr, 0, false)
 
 	return lines
