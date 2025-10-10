@@ -1,20 +1,17 @@
-interval_secs = 60
-interval_secs_on_ac = 60
-timezone = "Local"
-log_dir = "~/.local/state/battery-logger"
-log_file = "battery.csv"
-max_lines = 2000
-trim_buffer = 100
-max_charge_percent = 100
+# Core Settings
+interval_secs = 60               # Data logging frequency in seconds
+interval_secs_on_ac = 60         # Logging frequency when AC connected
+timezone = "Local"               # Timezone for timestamps
+log_dir = "~/.local/state/battery-logger"  # Directory for log files
+log_file = "battery.csv"         # Name of the CSV log file
+max_lines = 2000                 # Maximum lines in log before rotation
+trim_buffer = 100                # Lines to keep when trimming log
+max_charge_percent = 100         # Maximum charge threshold for predictions
+suspend_gap_minutes = 5          # Gap threshold for detecting suspend/shutdown events
 
-# Day/Night visualization settings
-day_color_number = -1     # Default terminal foreground color for day
-night_color_number = 234  # Very dark gray for night
-day_start_hour = 7        # 7 AM - when day starts
-day_end_hour = 19         # 7 PM - when night starts
-
-# Zoom settings
-max_window_zoom = 10      # Maximum zoom window in days
-
-# Suspend/shutdown detection settings
-suspend_gap_minutes = 5   # Consider data gaps >= this duration as suspend/shutdown events
+# TUI Settings
+day_color_number = -1            # Terminal color for day data points (default foreground)
+night_color_number = 234         # Terminal color for night data points (dark gray)
+day_start_hour = 7               # Hour when day visualization starts (7 AM)
+day_end_hour = 19                # Hour when night visualization starts (7 PM)
+max_window_zoom = 10             # Maximum zoom window in days for charts
