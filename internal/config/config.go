@@ -189,6 +189,10 @@ func loadConfigFile(path string, cfg *Config) error {
 			if val, err := strconv.Atoi(value); err == nil {
 				cfg.MaxWindowZoom = val
 			}
+		case "suspend_gap_minutes":
+			if val, err := strconv.Atoi(value); err == nil {
+				cfg.SuspendGapMinutes = val
+			}
 		}
 	}
 
