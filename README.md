@@ -29,7 +29,7 @@
 - **Weekly SOT visualization** - bar charts showing daily usage trends
 
 
-## Installation
+## Install
 
 ```bash
 ./install.sh
@@ -99,7 +99,7 @@ The TUI provides comprehensive battery analytics:
 See [`systemd/`](systemd/) for service files. Use `make` or copy manually for custom setups.
 
 
-## Uninstallation
+## Uninstall
 
 ```bash
 ./uninstall.sh
