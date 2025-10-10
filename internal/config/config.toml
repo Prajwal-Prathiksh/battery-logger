@@ -15,3 +15,6 @@ day_end_hour = 19         # 7 PM - when night starts
 
 # Zoom settings
 max_window_zoom = 10      # Maximum zoom window in days
+
+# Suspend/shutdown detection settings
+suspend_gap_minutes = 5   # Consider data gaps >= this duration as suspend/shutdown events
