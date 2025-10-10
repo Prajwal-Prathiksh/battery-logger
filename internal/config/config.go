@@ -33,7 +33,7 @@ func Defaults() Config {
 		IntervalSecsOnAC:  300,
 		Timezone:          "Local",
 		LogDir:            filepath.Join(xdgStateHome(), "battery-zen"),
-		LogFile:           "battery.csv",
+		LogFile:           "logs.csv",
 		MaxLines:          4000,
 		TrimBuffer:        100,
 		MaxChargePercent:  100,

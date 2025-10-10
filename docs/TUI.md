@@ -106,7 +106,7 @@ The TUI uses **weighted linear regression** to predict battery discharge and cha
 
 ### "No recent data in window"
 - Check if battery-zen service is running: `systemctl --user status battery-zen`
-- Verify data file exists: `~/.local/state/battery-zen/battery.csv`
+- Verify data file exists: `~/.local/state/battery-zen/logs.csv`
 - Ensure battery-zen has been collecting data for some time
 
 ### "Need ≥2 charging/discharging samples"

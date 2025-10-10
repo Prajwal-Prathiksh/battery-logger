@@ -79,7 +79,7 @@ See config file for all available options.
 
 ## Output
 
-CSV log: `~/.local/state/battery-zen/battery.csv`
+CSV log: `~/.local/state/battery-zen/logs.csv`
 
 
 ## Analytics & Predictions
@@ -125,7 +125,7 @@ All configuration options available in config files:
 - `interval_secs_on_ac = 60` - Logging frequency when AC connected
 - `timezone = "Local"` - Timezone for timestamps
 - `log_dir = "~/.local/state/battery-zen"` - Directory for log files
-- `log_file = "battery-zen.csv"` - Name of the CSV log file
+- `log_file = "logs.csv"` - Name of the CSV log file
 - `max_lines = 4000` - Maximum lines in log before rotation
 - `trim_buffer = 100` - Lines to keep when trimming log
 - `max_charge_percent = 100` - Maximum charge threshold for predictions
