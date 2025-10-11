@@ -1,0 +1,15 @@
+#compdef battery-zen
+
+_battery_zen() {
+    local -a commands
+    commands=(
+        'sample:Append one CSV sample'
+        'run:Daemon loop (periodic)'
+        'trim:Force trim to max_lines'
+        'status:Print current reading and path'
+        'tui:Launch interactive TUI for data visualization'
+    )
+    _describe 'command' commands
+}
+
+_battery_zen

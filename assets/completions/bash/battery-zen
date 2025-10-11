@@ -1,0 +1,18 @@
+# bash completion for battery-zen
+
+_battery_zen() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="sample run trim status tui"
+
+    case "${prev}" in
+        battery-zen)
+            COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+            return 0
+            ;;
+    esac
+}
+
+complete -F _battery_zen battery-zen
