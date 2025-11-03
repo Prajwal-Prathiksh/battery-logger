@@ -35,11 +35,19 @@
 ./install.sh
 ```
 
+- This will:
+  1. Build the binary
+  2. Install the binary to `~/.local/bin/`
+  3. Install, enable and start the systemd service, so `battery-zen` starts on boot and logs data in the background
+  4. Create default config file at `~/.config/battery-zen/config.toml`
+
+> [!NOTE]
+> Once installed through the script, you can run `battery-zen` commands directly from your terminal, with tab completions for `bash` and `zsh` shells. From next boot/suspend, the service will start logging data automatically in the background.
+
 
 ## Usage
 
 ```bash
-battery-zen run      # Start daemon
 battery-zen tui      # Launch TUI
 battery-zen status   # Show status
 ```
